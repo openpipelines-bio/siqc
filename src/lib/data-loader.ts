@@ -1,4 +1,5 @@
 import { DataHeader, WorkerMessage, WorkerResponse, TypedColumnData } from './data-types';
+import { markDataDecompressionStart, markDataDecompressionEnd, markDataParsingStart, markDataParsingEnd } from './performance-monitor';
 
 /**
  * Progressive data loader that uses Web Workers for decompression
@@ -19,6 +20,9 @@ export class DataLoader {
       return; // Already initialized
     }
 
+    console.log('🚀 Initializing data loader...');
+    markDataDecompressionStart();
+
     // Create worker
     this.worker = new Worker('/src/lib/loader.worker.ts', { type: 'module' });
     
@@ -29,6 +33,8 @@ export class DataLoader {
     if (!base64Data) {
       throw new Error('No payload found in HTML');
     }
+
+    console.log(`📦 Payload size: ${(base64Data.length / 1024 / 1024).toFixed(2)}MB (base64)`);
 
     // Send payload to worker
     const payloadPromise = new Promise<void>((resolve, reject) => {
@@ -74,7 +80,13 @@ export class DataLoader {
       this.worker.postMessage({ type: 'loadHeader' } as WorkerMessage);
     });
 
+    markDataParsingStart();
     this.header = await headerPromise;
+    markDataParsingEnd();
+    markDataDecompressionEnd();
+    
+    const categoryKeys = [...new Set(this.header.columns.map(col => col.categoryKey))];
+    console.log(`✅ Data loader initialized. Categories: ${categoryKeys.join(', ')} (${this.header.columns.length} columns)`);
   }
 
   /**
@@ -266,6 +278,36 @@ export class DataLoader {
     }
 
     return Array.from(new Set(this.header.columns.map(col => col.categoryKey)));
+  }
+
+  /**
+   * Load multiple columns in parallel for better performance
+   */
+  async loadColumns(requests: Array<{columnName: string, categoryKey: string}>): Promise<TypedColumnData[]> {
+    // Load all columns in parallel
+    const promises = requests.map(req => this.loadColumn(req.columnName, req.categoryKey));
+    return Promise.all(promises);
+  }
+
+  /**
+   * Preload commonly used columns to reduce initial load times
+   */
+  async preloadCommonColumns(): Promise<void> {
+    if (!this.header) return;
+
+    const commonColumns = ['sample_id', 'total_counts', 'num_nonzero_vars'];
+    const preloadPromises: Promise<any>[] = [];
+
+    // Find which columns to preload
+    for (const column of this.header.columns) {
+      if (commonColumns.includes(column.name)) {
+        console.log(`🔄 Preloading ${column.name} from ${column.categoryKey}`);
+        preloadPromises.push(this.loadColumn(column.name, column.categoryKey));
+      }
+    }
+
+    await Promise.all(preloadPromises);
+    console.log('✅ Common columns preloaded');
   }
 
   /**

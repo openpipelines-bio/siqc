@@ -26,6 +26,7 @@ import { JSX, Show, createSignal, createEffect } from 'solid-js';
 import { createViewportLoader, ChartPlaceholder, ChartErrorBoundary } from '../lib/progressive-loading';
 import { dynamicDataLoader, ChartDataRequest, ChartDataResponse } from '../lib/dynamic-data-loader';
 import { FilterSettings } from '../types';
+import { startChartMetric, markChartDataLoadStart, markChartDataLoadEnd, markChartRenderStart, markChartRenderEnd } from '../lib/performance-monitor';
 
 interface DynamicChartProps {
   categoryKey: string;
@@ -154,16 +155,30 @@ interface DynamicChartProps {
  * </DynamicChart>
  */
 export function DynamicChart(props: DynamicChartProps): JSX.Element {
-  // Create the data loading function
+  // Generate unique chart ID for performance tracking
+  const chartId = `chart-${props.categoryKey}-${props.columnNames.join('-')}-${Date.now()}`;
+  
+  // Create the data loading function with performance tracking
   const loadData = async (): Promise<ChartDataResponse> => {
-    const request: ChartDataRequest = {
-      categoryKey: props.categoryKey,
-      columnNames: props.columnNames,
-      filterSettings: props.filterSettings,
-      groupBy: props.groupBy
-    };
+    const chartMetric = startChartMetric(chartId, props.title);
+    markChartDataLoadStart(chartId);
     
-    return dynamicDataLoader.loadChartData(request);
+    try {
+      const request: ChartDataRequest = {
+        categoryKey: props.categoryKey,
+        columnNames: props.columnNames,
+        filterSettings: props.filterSettings,
+        groupBy: props.groupBy
+      };
+      
+      const response = await dynamicDataLoader.loadChartData(request);
+      markChartDataLoadEnd(chartId, response.metadata.cacheHit);
+      
+      return response;
+    } catch (error) {
+      console.error(`❌ Chart data loading failed for ${props.title}:`, error);
+      throw error;
+    }
   };
   
   const { data, loading, error, setElement } = createViewportLoader(loadData, { threshold: 0.1 });
@@ -203,7 +218,15 @@ export function DynamicChart(props: DynamicChartProps): JSX.Element {
         >
           {(() => {
             const chartData = data()!;
-            return (
+            
+            // Track rendering performance
+            markChartRenderStart(chartId);
+            
+            // Calculate memory footprint estimate
+            const memoryFootprint = chartData.metadata.dataSize;
+            
+            // Render the chart
+            const chartElement = (
               <div>
                 {props.children(chartData.data, chartData.metadata)}
                 <div class="text-xs text-gray-400 mt-2 flex justify-between">
@@ -217,6 +240,11 @@ export function DynamicChart(props: DynamicChartProps): JSX.Element {
                 </div>
               </div>
             );
+            
+            // Mark rendering complete
+            setTimeout(() => markChartRenderEnd(chartId, memoryFootprint), 0);
+            
+            return chartElement;
           })()}
         </Show>
       </Show>

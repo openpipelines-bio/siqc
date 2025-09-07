@@ -30,6 +30,7 @@ import { Heatmap } from "~/components/heatmap";
 import { ChartPlaceholder } from "./lib/progressive-loading";
 import { DynamicChart } from "./components/dynamic-chart";
 import { ProgressiveWrapper, AggregatedChart, MultiSourceChart } from "./components/progressive-chart";
+import { PerformanceDashboard } from "./components/performance-dashboard";
 
 const App: Component = () => {
   const [reportStructure, setReportStructure] = createSignal<ReportStructure>({categories: []});
@@ -341,6 +342,10 @@ const App: Component = () => {
       }>
         <div class="container mx-a space-y-2">
         <H1>OpenPipelines Ingestion QC Report</H1>
+        
+        {/* Performance monitoring dashboard */}
+        <PerformanceDashboard />
+        
         <SampleFilterForm sampleMetadata={sampleMetadata()} data={data()} />
         <GlobalVisualizationSettings getCategoricalColumns={getCategoricalColumns} />
         <For each={reportStructure().categories}>
