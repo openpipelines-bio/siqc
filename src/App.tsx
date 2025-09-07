@@ -49,9 +49,17 @@ const App: Component = () => {
     await initializeDataLoader();
     
     // Start preloading critical data in parallel
-    const preloadPromise = progressiveDataAdapter.preloadCriticalData().catch(error => {
-      console.warn("⚠️ Critical data preloading failed:", error);
-    });
+    const preloadPromises = [
+      progressiveDataAdapter.preloadCriticalData().catch(error => {
+        console.warn("⚠️ Critical data preloading failed:", error);
+      }),
+      // Also preload common columns through data loader
+      import('./lib/data-loader').then(({ dataLoader }) => {
+        return dataLoader.preloadCommonColumns().catch(error => {
+          console.warn("⚠️ Common columns preloading failed:", error);
+        });
+      })
+    ];
     
     console.log("📊 Reading QC categories");
     setReportStructure(await getReportStructure());
@@ -60,8 +68,10 @@ const App: Component = () => {
     const data = await getData();
     setData(data);
     
-    // Wait for preloading to complete (optional)
-    await preloadPromise;
+    // Wait for all preloading to complete (optional, runs in background)
+    Promise.all(preloadPromises).then(() => {
+      console.log("✅ All preloading completed");
+    });
     
     const initTime = performance.now() - initStart;
     console.log(`✅ Progressive initialization completed in ${initTime.toFixed(2)}ms`);

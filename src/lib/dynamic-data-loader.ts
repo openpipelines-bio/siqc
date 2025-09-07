@@ -155,22 +155,32 @@ class DynamicDataLoader {
     const { categoryKey, columnNames } = request;
     
     if (columnNames.length <= 3) {
-      // For small requests, load individual columns
-      const columnData: Record<string, any> = {};
+      // Load columns in parallel for better performance
+      const columnRequests = columnNames.map(columnName => ({
+        columnName,
+        categoryKey
+      }));
       
-      for (const columnName of columnNames) {
-        try {
-          columnData[columnName] = await progressiveDataAdapter.loadColumnData(categoryKey, columnName);
-        } catch (error) {
-          console.warn(`Failed to load column ${columnName} from ${categoryKey}:`, error);
-          // Fall back to loading entire category
-          return progressiveDataAdapter.loadCategoryData(categoryKey);
-        }
+      try {
+        console.log(`🔄 Loading ${columnNames.length} columns in parallel for ${categoryKey}`);
+        const columnDataArray = await dataLoader.loadColumns(columnRequests);
+        
+        // Convert to expected format
+        const columnData: Record<string, any> = {};
+        columnDataArray.forEach((data, index) => {
+          columnData[columnNames[index]] = data;
+        });
+        
+        console.log(`✅ Parallel column loading completed for ${categoryKey}`);
+        return this.formatColumnData(columnData, request);
+      } catch (error) {
+        console.warn(`⚠️ Parallel loading failed for ${categoryKey}, falling back to category load:`, error);
+        // Fall back to loading entire category
+        return progressiveDataAdapter.loadCategoryData(categoryKey);
       }
-      
-      return this.formatColumnData(columnData, request);
     } else {
       // For larger requests, load entire category
+      console.log(`📦 Loading entire category ${categoryKey} (${columnNames.length} columns)`);
       return progressiveDataAdapter.loadCategoryData(categoryKey);
     }
   }
