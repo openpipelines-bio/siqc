@@ -1,17 +1,15 @@
 #!/usr/bin/env node
 
 /**
- * QC Report Generator CLI
+ * QC Report Generator CLI - Yargs Implementation
  * 
- * A command-line tool for generating interactive QC reports from scientific data.
- * Supports progressive loading, spatial visualization, and standalone HTML output.
- * 
- * Usage:
- *   qc-report generate <type> <output-dir>
- *   qc-report build --data <file> --structure <file> --output <file>
- *   qc-report --help
+ * A modern command-line tool for generating interactive QC reports from scientific data.
+ * Features progressive loading, spatial visualization, and standalone HTML output.
+ * Built with Yargs for rich validation and user experience.
  */
 
+import yargs from 'yargs';
+import { hideBin } from 'yargs/helpers';
 import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
@@ -20,274 +18,170 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-function showHelp() {
-  console.log(`
-🧬 QC Report Generator
+const cli = yargs(hideBin(process.argv))
+  .scriptName('qc-report')
+  .usage('🧬 Generate interactive QC reports from scientific data\n\nUsage: $0 <command> [options]')
+  .version('0.1.0')
+  .help('help')
+  .alias('h', 'help')
+  .alias('v', 'version')
+  .demandCommand(1, 'You need at least one command before moving on')
+  .strict()
+  .wrap(120);
 
-Generate interactive QC reports from scientific data with progressive loading.
-
-Usage:
-  qc-report <command> [options]
-
-Commands:
-  generate-test-data             Generate example datasets for testing
-  render                         Render QC report from existing data
-
-Generate Test Data Command:
-  qc-report generate-test-data --type <type> --output <dir>
-    
-  Required:
-    --type <type>         Dataset type to generate
-    --output <dir>        Output directory for generated files
-
-  Types:
-    sc           Single-cell RNA-seq dataset (small, ~20 cells)
-    sc_large     Large single-cell dataset (~1.2M cells)
-    xenium       Xenium spatial dataset (small, ~20 cells)
-    xenium_large Large Xenium spatial dataset (~1.2M cells)
-
-  Examples:
-    qc-report generate-test-data --type sc --output ./example-data
-    qc-report generate-test-data --type xenium --output ./spatial-example
-
-Render Command:
-  qc-report render --data <file> --structure <file> --output <file> [options]
-
-  Required:
-    --data <file>         Path to the data.json file
-    --structure <file>    Path to the structure.json file  
-    --output <file>       Output HTML file path
-
-  Optional:
-    --payload <file>      Compressed payload file (default: auto-generated)
-    --no-auto-generate    Don't auto-generate payload if missing
-
-  Examples:
-    qc-report render --data ./data.json --structure ./structure.json --output ./report.html
-    qc-report render --data ./my-data/data.json --structure ./my-data/structure.json --output ./my-report.html
-
-Quick Start:
-  # Generate example data and render report
-  qc-report generate-test-data --type sc --output ./example
-  qc-report render --data ./example/data.json --structure ./example/structure.json --output ./report.html
-
-Global Options:
-  --help               Show this help message
-  --version            Show version information
-
-For more information, visit: https://github.com/openpipelines-bio/qc_report_generator
-`);
-}
-
-function parseArgs() {
-  const args = process.argv.slice(2);
-  
-  // Handle help and version at the top level
-  if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
-    return { command: 'help' };
-  }
-  
-  if (args.includes('--version') || args.includes('-v')) {
-    return { command: 'version' };
-  }
-
-  const command = args[0];
-  
-  if (command === 'generate-test-data') {
-    return parseGenerateTestDataCommand(args.slice(1));
-  } else if (command === 'render') {
-    return parseRenderCommand(args.slice(1));
-  } else {
-    console.error(`❌ Unknown command: ${command}`);
-    console.error('Available commands: generate-test-data, render');
-    console.error('Use --help to see usage information');
-    process.exit(1);
-  }
-}
-
-function parseGenerateTestDataCommand(args) {
-  const options = {
-    command: 'generate-test-data',
-    type: null,
-    outputDir: null
-  };
-
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    const nextArg = args[i + 1];
-
-    switch (arg) {
-      case '--type':
-        if (!nextArg) {
-          console.error('❌ --type requires a dataset type');
-          process.exit(1);
-        }
-        options.type = nextArg;
-        i++;
-        break;
-      case '--output':
-        if (!nextArg) {
-          console.error('❌ --output requires a directory path');
-          process.exit(1);
-        }
-        options.outputDir = nextArg;
-        i++;
-        break;
-      case '--help':
-      case '-h':
-        return { command: 'help' };
-      default:
-        console.error(`❌ Unknown option for generate-test-data command: ${arg}`);
-        console.error('Use "qc-report generate-test-data --help" to see available options');
-        process.exit(1);
-    }
-  }
-
-  // Validate required arguments
-  if (!options.type) {
-    console.error('❌ Missing required argument: --type');
-    console.error('Usage: qc-report generate-test-data --type <type> --output <dir>');
-    process.exit(1);
-  }
-
-  if (!options.outputDir) {
-    console.error('❌ Missing required argument: --output');
-    console.error('Usage: qc-report generate-test-data --type <type> --output <dir>');
-    process.exit(1);
-  }
-  
-  const validTypes = ['sc', 'sc_large', 'xenium', 'xenium_large'];
-  if (!validTypes.includes(options.type)) {
-    console.error(`❌ Invalid dataset type: ${options.type}`);
-    console.error(`Valid types: ${validTypes.join(', ')}`);
-    process.exit(1);
-  }
-
-  return options;
-}
-
-function parseRenderCommand(args) {
-  const options = {
-    command: 'render',
-    data: null,
-    structure: null,
-    output: null,
-    payload: null,
-    autoGenerate: true
-  };
-
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    const nextArg = args[i + 1];
-
-    switch (arg) {
-      case '--data':
-        if (!nextArg) {
-          console.error('❌ --data requires a file path');
-          process.exit(1);
-        }
-        options.data = nextArg;
-        i++;
-        break;
-      case '--structure':
-        if (!nextArg) {
-          console.error('❌ --structure requires a file path');
-          process.exit(1);
-        }
-        options.structure = nextArg;
-        i++;
-        break;
-      case '--output':
-        if (!nextArg) {
-          console.error('❌ --output requires a file path');
-          process.exit(1);
-        }
-        options.output = nextArg;
-        i++;
-        break;
-      case '--payload':
-        if (!nextArg) {
-          console.error('❌ --payload requires a file path');
-          process.exit(1);
-        }
-        options.payload = nextArg;
-        i++;
-        break;
-      case '--no-auto-generate':
-        options.autoGenerate = false;
-        break;
-      case '--help':
-      case '-h':
-        return { command: 'help' };
-      default:
-        console.error(`❌ Unknown option for render command: ${arg}`);
-        console.error('Use "qc-report render --help" to see available options');
-        process.exit(1);
-    }
-  }
-
-  return options;
-}
-
-function validateRenderOptions(options) {
-  // Validate required arguments for render command
-  if (!options.data || !options.structure || !options.output) {
-    console.error('❌ Missing required arguments for render command');
-    console.error('   Required: --data <file> --structure <file> --output <file>');
-    process.exit(1);
-  }
-
-  // Resolve and validate paths
-  options.data = path.resolve(options.data);
-  options.structure = path.resolve(options.structure);
-  options.output = path.resolve(options.output);
-
-  if (!fs.existsSync(options.data)) {
-    console.error(`❌ Data file not found: ${options.data}`);
-    process.exit(1);
-  }
-
-  if (!fs.existsSync(options.structure)) {
-    console.error(`❌ Structure file not found: ${options.structure}`);
-    process.exit(1);
-  }
-
-  // Validate output directory exists
-  const outputDir = path.dirname(options.output);
-  if (!fs.existsSync(outputDir)) {
-    console.error(`❌ Output directory does not exist: ${outputDir}`);
-    console.error('   Please create the directory first or use an existing path');
-    process.exit(1);
-  }
-
-  // Handle payload file
-  if (options.payload) {
-    options.payload = path.resolve(options.payload);
-    if (!fs.existsSync(options.payload)) {
-      console.error(`❌ Payload file not found: ${options.payload}`);
+// Generate Test Data Command
+cli.command({
+  command: 'generate-test-data',
+  aliases: ['generate', 'gen'],
+  desc: 'Generate example datasets for testing',
+  builder: (yargs) => {
+    return yargs
+      .option('type', {
+        alias: 't',
+        describe: 'Dataset type to generate',
+        type: 'string',
+        choices: ['sc', 'sc_large', 'xenium', 'xenium_large'],
+        demandOption: true
+      })
+      .option('output', {
+        alias: 'o',
+        describe: 'Output directory for generated files',
+        type: 'string',
+        demandOption: true,
+        normalize: true
+      })
+      .option('verbose', {
+        describe: 'Enable verbose logging',
+        type: 'boolean',
+        default: false
+      })
+      .example([
+        ['$0 generate-test-data --type sc --output ./example-data', 'Generate small single-cell dataset'],
+        ['$0 gen -t xenium_large -o ./spatial --verbose', 'Generate large spatial dataset with verbose output']
+      ])
+      .group(['type', 'output'], 'Required Options:')
+      .group(['verbose'], 'Optional Settings:');
+  },
+  handler: async (argv) => {
+    try {
+      await generateTestData(argv);
+    } catch (error) {
+      console.error('❌ Error:', error.message);
       process.exit(1);
     }
-  } else if (options.autoGenerate) {
-    // Auto-generate payload path
-    const dataDir = path.dirname(options.data);
-    options.payload = path.join(dataDir, 'qc-report-payload.bin');
   }
+});
 
-  return options;
-}
+// Render Report Command  
+cli.command({
+  command: 'render',
+  aliases: ['build'],
+  desc: 'Render QC report from existing data',
+  builder: (yargs) => {
+    return yargs
+      .option('data', {
+        alias: 'd',
+        describe: 'Path to data JSON file',
+        type: 'string',
+        demandOption: true,
+        normalize: true,
+        coerce: (arg) => {
+          const resolved = path.resolve(arg);
+          if (!fs.existsSync(resolved)) {
+            throw new Error(`Data file not found: ${resolved}`);
+          }
+          return resolved;
+        }
+      })
+      .option('structure', {
+        alias: 's', 
+        describe: 'Path to structure JSON file',
+        type: 'string',
+        demandOption: true,
+        normalize: true,
+        coerce: (arg) => {
+          const resolved = path.resolve(arg);
+          if (!fs.existsSync(resolved)) {
+            throw new Error(`Structure file not found: ${resolved}`);
+          }
+          return resolved;
+        }
+      })
+      .option('output', {
+        alias: 'o',
+        describe: 'Output HTML file path',
+        type: 'string', 
+        demandOption: true,
+        normalize: true,
+        coerce: (arg) => {
+          const resolved = path.resolve(arg);
+          const outputDir = path.dirname(resolved);
+          if (!fs.existsSync(outputDir)) {
+            throw new Error(`Output directory does not exist: ${outputDir}`);
+          }
+          return resolved;
+        }
+      })
+      .option('payload', {
+        alias: 'p',
+        describe: 'Path to binary payload file (auto-generated if not specified)',
+        type: 'string',
+        normalize: true
+      })
+      .option('auto-generate', {
+        describe: 'Auto-generate payload file if not specified',
+        type: 'boolean',
+        default: true
+      })
+      .option('verbose', {
+        describe: 'Enable verbose logging',
+        type: 'boolean',
+        default: false
+      })
+      .example([
+        ['$0 render --data data.json --structure structure.json --output report.html', 'Basic report generation'],
+        ['$0 render -d ./data/data.json -s ./data/structure.json -o ./reports/qc.html --verbose', 'Generate report with verbose output'],
+        ['$0 build --data data.json --structure structure.json --output report.html --payload custom.bin', 'Use custom payload file']
+      ])
+      .group(['data', 'structure', 'output'], 'Required Options:')
+      .group(['payload', 'auto-generate', 'verbose'], 'Optional Settings:');
+  },
+  handler: async (argv) => {
+    try {
+      await renderReport(argv);
+    } catch (error) {
+      console.error('❌ Error:', error.message);
+      process.exit(1);
+    }
+  }
+});
 
-async function generateTestData(type, outputDir) {
-  console.log(`🧬 Generating ${type} test dataset...`);
+// Add global middleware for validation
+cli.middleware((argv) => {
+  if (argv.verbose) {
+    console.log('🔧 Running in verbose mode');
+  }
+});
+
+// Implementation functions
+async function generateTestData(options) {
+  const { type, output: outputDir, verbose } = options;
+  
+  if (verbose) {
+    console.log(`🧬 Generating ${type} test dataset...`);
+  } else {
+    console.log(`🧬 Generating ${type} test dataset...`);
+  }
   
   // Create output directory if it doesn't exist
   if (!fs.existsSync(outputDir)) {
-    console.log(`📁 Creating directory: ${outputDir}`);
+    if (verbose) console.log(`📁 Creating directory: ${outputDir}`);
     fs.mkdirSync(outputDir, { recursive: true });
   }
 
   try {
     // Import and use the data generator
-    const { generateScDataset, generateXeniumDataset, generateScStructure, generateXeniumStructure, transformDataFrame } = 
+    const { generateScDataset, generateXeniumDataset, generateScStructure, generateXeniumStructure } = 
       await import('./scripts/generate_data.js');
 
     const generators = {
@@ -344,13 +238,13 @@ async function generateTestData(type, outputDir) {
     const dataPath = path.join(outputDir, 'data.json');
     const structurePath = path.join(outputDir, 'structure.json');
 
-    console.log(`📊 Generating data for ${generator.label}...`);
+    if (verbose) console.log(`📊 Generating data for ${generator.label}...`);
     const data = generator.dataFun();
 
-    console.log(`🏗️  Generating structure for ${generator.label}...`);
+    if (verbose) console.log(`🏗️  Generating structure for ${generator.label}...`);
     const structure = generator.structureFun();
 
-    console.log('💾 Writing data and structure to JSON files...');
+    if (verbose) console.log('💾 Writing data and structure to JSON files...');
     fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
     fs.writeFileSync(structurePath, JSON.stringify(structure, null, 2));
 
@@ -362,31 +256,52 @@ async function generateTestData(type, outputDir) {
     console.log(`   qc-report render --data ${dataPath} --structure ${structurePath} --output ./report.html`);
     
   } catch (error) {
-    console.error(`❌ Failed to generate ${type} dataset:`, error.message);
-    process.exit(1);
+    throw new Error(`Failed to generate ${type} dataset: ${error.message}`);
   }
 }
 
-function renderReport(options) {
-  console.log('🚀 Rendering QC Report...');
-  console.log(`📊 Data: ${options.data || 'using existing payload'}`);
-  console.log(`📋 Structure: ${options.structure || 'using existing payload'}`);
-  console.log(`📦 Payload: ${options.payload}`);
-  console.log(`📁 Output: ${options.output}`);
+async function renderReport(options) {
+  const { data, structure, output, payload, autoGenerate, verbose } = options;
+  
+  if (verbose) {
+    console.log('🚀 Rendering QC Report...');
+    console.log(`📊 Data: ${data}`);
+    console.log(`📋 Structure: ${structure}`);
+    console.log(`📁 Output: ${output}`);
+  } else {
+    console.log('🚀 Rendering QC Report...');
+  }
+
+  // Handle payload file
+  let finalPayload = payload;
+  if (!finalPayload && autoGenerate) {
+    const dataDir = path.dirname(data);
+    finalPayload = path.join(dataDir, 'qc-report-payload.bin');
+  }
+
+  if (verbose && finalPayload) {
+    console.log(`📦 Payload: ${finalPayload}`);
+  }
+
+  // Validate JSON files
+  try {
+    JSON.parse(fs.readFileSync(data, 'utf8'));
+    JSON.parse(fs.readFileSync(structure, 'utf8'));
+  } catch (error) {
+    throw new Error(`Invalid JSON file: ${error.message}`);
+  }
 
   // Set environment variables for the Vite build
   const env = {
     ...process.env,
-    QC_PAYLOAD_PATH: options.payload,
-    QC_AUTO_GENERATE: options.autoGenerate.toString(),
-    NODE_ENV: 'production'
+    QC_AUTO_GENERATE: autoGenerate.toString(),
+    NODE_ENV: 'production',
+    QC_DATA_PATH: data,
+    QC_STRUCTURE_PATH: structure
   };
 
-  if (options.data) {
-    env.QC_DATA_PATH = options.data;
-  }
-  if (options.structure) {
-    env.QC_STRUCTURE_PATH = options.structure;
+  if (finalPayload) {
+    env.QC_PAYLOAD_PATH = finalPayload;
   }
 
   try {
@@ -400,48 +315,46 @@ function renderReport(options) {
     }
 
     // Run the build from the package directory
-    console.log('🔨 Running build...');
+    if (verbose) console.log('🔨 Running build...');
     execSync(`${packageManager} run build`, {
-      stdio: 'inherit',
+      stdio: verbose ? 'inherit' : 'pipe',
       env,
-      cwd: options.templateDir
+      cwd: __dirname
     });
 
-    const builtFile = path.join(options.templateDir, 'dist', 'index.html');
+    const builtFile = path.join(__dirname, 'dist', 'index.html');
     
     if (!fs.existsSync(builtFile)) {
-      console.error('❌ Build completed but output file not found');
-      console.error(`Expected: ${builtFile}`);
-      process.exit(1);
+      throw new Error('Build completed but output file not found');
     }
 
     // Copy to final output location
-    if (path.resolve(options.output) !== builtFile) {
-      console.log(`📁 Copying report to: ${options.output}`);
-      const outputDir = path.dirname(options.output);
+    if (path.resolve(output) !== builtFile) {
+      if (verbose) console.log(`📁 Copying report to: ${output}`);
+      const outputDir = path.dirname(output);
       if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true });
       }
-      fs.copyFileSync(builtFile, options.output);
+      fs.copyFileSync(builtFile, output);
     }
 
-    console.log(`✅ QC Report rendered successfully: ${options.output}`);
+    console.log(`✅ QC Report rendered successfully: ${output}`);
 
     // Show file size
-    const stats = fs.statSync(options.output);
+    const stats = fs.statSync(output);
     const sizeMB = (stats.size / 1024 / 1024).toFixed(1);
     console.log(`📊 Report size: ${sizeMB} MB`);
 
     // Clean up temporary payload if it was auto-generated
-    if (options.autoGenerate && options.payload && fs.existsSync(options.payload)) {
-      const payloadDir = path.dirname(options.payload);
-      const outputDir = path.dirname(options.output);
+    if (autoGenerate && finalPayload && fs.existsSync(finalPayload)) {
+      const payloadDir = path.dirname(finalPayload);
+      const outputFileDir = path.dirname(output);
       
       // Only clean up if payload is in a different directory than output
-      if (payloadDir !== outputDir) {
+      if (payloadDir !== outputFileDir) {
         try {
-          fs.unlinkSync(options.payload);
-          console.log('🧹 Cleaned up temporary payload file');
+          fs.unlinkSync(finalPayload);
+          if (verbose) console.log('🧹 Cleaned up temporary payload file');
         } catch {
           // Ignore cleanup errors
         }
@@ -449,49 +362,9 @@ function renderReport(options) {
     }
 
   } catch (error) {
-    console.error('❌ Render failed:', error.message);
-    console.error('\n💡 Make sure you have all dependencies installed in the package directory');
-    process.exit(1);
+    throw new Error(`Render failed: ${error.message}`);
   }
 }
 
-function showVersion() {
-  const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
-  console.log(`QC Report Generator v${packageJson.version}`);
-}
-
-async function main() {
-  try {
-    const options = parseArgs();
-
-    switch (options.command) {
-      case 'help':
-        showHelp();
-        break;
-        
-      case 'version':
-        showVersion();
-        break;
-        
-      case 'generate-test-data':
-        await generateTestData(options.type, options.outputDir);
-        break;
-        
-      case 'render':
-        const validatedOptions = validateRenderOptions(options);
-        // Add template directory for render
-        validatedOptions.templateDir = __dirname;
-        renderReport(validatedOptions);
-        break;
-        
-      default:
-        console.error(`❌ Unknown command: ${options.command}`);
-        process.exit(1);
-    }
-  } catch (error) {
-    console.error('❌ Error:', error.message);
-    process.exit(1);
-  }
-}
-
-main();
+// Parse command line arguments
+cli.parse();

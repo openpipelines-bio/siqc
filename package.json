@@ -7,7 +7,7 @@
     "qc-report": "./cli.js"
   },
   "files": [
-    "cli.js", 
+    "cli.js",
     "plugins/**/*",
     "src/**/*",
     "index.html",
@@ -23,9 +23,11 @@
     "dev": "vite",
     "build": "vite build",
     "serve": "vite preview",
-    "compress_data": "node scripts/compress_data.js",
-    "generate_data": "node scripts/generate_data.js",
-    "generate_data:all": "node scripts/generate_all_data.js",
+    
+    "cli": "node cli.js",
+    "generate-test-data": "node cli.js generate-test-data",
+    "render": "node cli.js render",
+    
     "prettier": "prettier -w \"src/**/*.{js,ts,json,css,tsx,jsx}\" \"*.{js,ts,mjs}\"",
     "clean": "rm -rf dist .cache .temp node_modules src/data",
     "prepublishOnly": "npm run build"
@@ -84,7 +86,8 @@
     "plotly.js-dist-min": "^2.35.3",
     "solid-js": "^1.9.3",
     "tailwind-merge": "^2.6.0",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "yargs": "^18.0.0"
   },
   "packageManager": "pnpm@10.9.0"
 }
