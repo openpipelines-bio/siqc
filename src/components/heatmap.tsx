@@ -228,7 +228,8 @@ export function Heatmap(props: HeatmapProps) {
   
   return (
     <>
-      <Show when={props.filterSettings.cutoffMin !== undefined || props.filterSettings.cutoffMax !== undefined}>
+      <Show when={(props.filterSettings.cutoffMin !== undefined && props.filterSettings.cutoffMin !== null) || 
+                 (props.filterSettings.cutoffMax !== undefined && props.filterSettings.cutoffMax !== null)}>
         <div class="absolute top-2 right-2 z-10 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
           Filter applied: {props.filterSettings.field}
         </div>

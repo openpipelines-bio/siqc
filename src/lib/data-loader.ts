@@ -23,8 +23,8 @@ export class DataLoader {
     console.log('🚀 Initializing data loader...');
     markDataDecompressionStart();
 
-    // Create worker
-    this.worker = new Worker('/src/lib/loader.worker.ts', { type: 'module' });
+    // Create inline worker to avoid CORS issues with file:// URLs
+    this.worker = await this.createInlineWorker();
     
     // Send payload to worker
     const payloadElement = document.getElementById('payload');
@@ -333,6 +333,220 @@ export class DataLoader {
     
     const payloadElement = document.getElementById('payload');
     return !!(payloadElement?.textContent?.trim());
+  }
+
+  /**
+   * Create an inline worker to avoid CORS issues with file:// URLs
+   * This embeds the worker code as a blob to make the HTML truly standalone
+   */
+  private async createInlineWorker(): Promise<Worker> {
+    // Inline worker code to avoid CORS issues with file:// URLs
+    const workerCode = `
+// Data types for worker communication
+const cache = {
+  header: null,
+  buffer: null,
+  payload: null
+};
+
+async function loadPayload(base64Data) {
+  if (cache.buffer) {
+    return cache.buffer;
+  }
+
+  try {
+    if (!base64Data) {
+      throw new Error('No payload data provided');
+    }
+
+    // Decode base64 to Uint8Array
+    const binaryString = atob(base64Data);
+    const compressedData = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      compressedData[i] = binaryString.charCodeAt(i);
+    }
+
+    // Check if DecompressionStream is available (modern browsers)
+    if (typeof DecompressionStream !== 'undefined') {
+      // Use native DecompressionStream for better performance
+      const decompressStream = new DecompressionStream('gzip');
+      const reader = decompressStream.readable.getReader();
+      const writer = decompressStream.writable.getWriter();
+      
+      writer.write(compressedData);
+      writer.close();
+      
+      const chunks = [];
+      let result = await reader.read();
+      while (!result.done) {
+        chunks.push(result.value);
+        result = await reader.read();
+      }
+      
+      // Combine chunks into single buffer
+      const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+      const combined = new Uint8Array(totalLength);
+      let offset = 0;
+      for (const chunk of chunks) {
+        combined.set(chunk, offset);
+        offset += chunk.length;
+      }
+      
+      cache.buffer = combined.buffer;
+      cache.payload = base64Data;
+      
+      return cache.buffer;
+    } else {
+      throw new Error('DecompressionStream not supported in this browser');
+    }
+  } catch (error) {
+    throw new Error('Failed to decompress payload: ' + error.message);
+  }
+}
+
+function loadHeader(buffer) {
+  try {
+    // Parse JSON header format (not binary)
+    const view = new DataView(buffer);
+    const headerLength = view.getUint32(0, true); // little-endian
+    const headerBytes = new Uint8Array(buffer, 4, headerLength);
+    const headerJson = new TextDecoder().decode(headerBytes);
+    
+    return JSON.parse(headerJson);
+  } catch (error) {
+    throw new Error('Failed to parse header: ' + error.message);
+  }
+}
+
+function extractColumn(buffer, columnInfo) {
+  try {
+    // Calculate aligned data start offset (matching original worker)
+    const headerLength = new DataView(buffer).getUint32(0, true);
+    const dataStart = 4 + headerLength;
+    const alignment = 4;
+    const padding = (alignment - (dataStart % alignment)) % alignment;
+    const alignedDataStart = dataStart + padding;
+    
+    // Column offset is relative to aligned data start
+    const absoluteOffset = alignedDataStart + columnInfo.offset;
+    
+    let typedArray;
+    
+    switch (columnInfo.dtype) {
+      case 'int32':
+      case 'categorical':
+        // Create a copy of the data to transfer
+        const int32Data = new Int32Array(buffer, absoluteOffset, columnInfo.length);
+        typedArray = new Int32Array(int32Data).buffer;
+        break;
+      case 'float32':
+        // Create a copy of the data to transfer
+        const float32Data = new Float32Array(buffer, absoluteOffset, columnInfo.length);
+        typedArray = new Float32Array(float32Data).buffer;
+        break;
+      default:
+        throw new Error('Unsupported column type: ' + columnInfo.dtype);
+    }
+    
+    return typedArray;
+  } catch (error) {
+    throw new Error('Failed to extract column: ' + error.message);
+  }
+}
+
+// Worker message handler
+self.addEventListener('message', async (event) => {
+  const { type, columnName, categoryKey, payload } = event.data;
+  
+  try {
+    if (type === 'setPayload') {
+      console.log('🔧 Worker: Loading payload...');
+      cache.payload = payload;
+      const buffer = await loadPayload(payload);
+      const header = loadHeader(buffer);
+      cache.header = header;
+      
+      self.postMessage({
+        type: 'header',
+        header: header
+      });
+    } else if (type === 'loadHeader') {
+      // Load and parse header
+      if (!cache.payload) {
+        throw new Error('No payload set. Call setPayload first.');
+      }
+      const buffer = await loadPayload(cache.payload);
+      const header = loadHeader(buffer);
+      
+      self.postMessage({
+        type: 'header',
+        header: header
+      });
+    } else if (type === 'loadColumn') {
+      if (!cache.payload) {
+        throw new Error('No payload set. Call setPayload first.');
+      }
+      
+      const buffer = await loadPayload(cache.payload);
+      const header = loadHeader(buffer);
+      
+      const columnInfo = header.columns.find(col => col.name === columnName && col.categoryKey === categoryKey);
+      if (!columnInfo) {
+        throw new Error('Column not found: ' + columnName + ' in category ' + categoryKey);
+      }
+      
+      const data = extractColumn(buffer, columnInfo);
+      
+      self.postMessage({
+        type: 'columnData',
+        columnName: columnName,
+        categoryKey: categoryKey,
+        data: data
+      }, [data]);
+    } else if (type === 'loadCategory') {
+      if (!cache.payload) {
+        throw new Error('No payload set. Call setPayload first.');
+      }
+      
+      const buffer = await loadPayload(cache.payload);
+      const header = loadHeader(buffer);
+      
+      const categoryColumns = header.columns.filter(col => col.categoryKey === categoryKey);
+      if (categoryColumns.length === 0) {
+        throw new Error('Category not found: ' + categoryKey);
+      }
+      
+      const result = {};
+      const transfers = [];
+      
+      for (const columnInfo of categoryColumns) {
+        const data = extractColumn(buffer, columnInfo);
+        result[columnInfo.name] = data;
+        transfers.push(data);
+      }
+      
+      self.postMessage({
+        type: 'categoryData',
+        categoryKey: categoryKey,
+        data: result
+      }, transfers);
+    } else {
+      throw new Error('Unknown message type: ' + type);
+    }
+  } catch (error) {
+    self.postMessage({
+      type: 'error',
+      error: error.message
+    });
+  }
+});
+`;
+    
+    // Create a blob URL for the worker
+    const blob = new Blob([workerCode], { type: 'application/javascript' });
+    const workerUrl = URL.createObjectURL(blob);
+    
+    return new Worker(workerUrl);
   }
 
   /**

@@ -52,9 +52,10 @@ export function FilterSettingsForm(props: Props) {
 
   // Inside the component, update this function to be more general
   const getFilterImpact = () => {
-    // Only apply for cell_rna_stats category with thresholds set
+    // Only apply for cell_rna_stats category with thresholds set (check for both null and undefined)
     if (props.category !== 'cell_rna_stats' || 
-        (props.filterSettings.cutoffMin === undefined && props.filterSettings.cutoffMax === undefined)) {
+        ((props.filterSettings.cutoffMin === undefined || props.filterSettings.cutoffMin === null) && 
+         (props.filterSettings.cutoffMax === undefined || props.filterSettings.cutoffMax === null))) {
       return null;
     }
     
@@ -74,7 +75,8 @@ export function FilterSettingsForm(props: Props) {
     
     for (let i = 0; i < totalCells; i++) {
       const val = colData[i];
-      if ((min !== undefined && val < min) || (max !== undefined && val > max)) {
+      if ((min !== undefined && min !== null && val < min) || 
+          (max !== undefined && max !== null && val > max)) {
         affectedCount++;
       }
     }
@@ -277,7 +279,8 @@ export function FilterSettingsForm(props: Props) {
                     </NumberField>
                     
                     {props.category === 'cell_rna_stats' && 
-                     (props.filterSettings.cutoffMin !== undefined || props.filterSettings.cutoffMax !== undefined) && (
+                     ((props.filterSettings.cutoffMin !== undefined && props.filterSettings.cutoffMin !== null) || 
+                      (props.filterSettings.cutoffMax !== undefined && props.filterSettings.cutoffMax !== null)) && (
                       () => {
                         const impact = getFilterImpact();
                         return impact && (

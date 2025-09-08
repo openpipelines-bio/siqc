@@ -38,7 +38,6 @@ class DynamicDataLoader {
     // Check cache first
     const cached = this.getFromCache(cacheKey);
     if (cached) {
-      console.log(`💾 Cache hit for chart data: ${request.categoryKey}`);
       return {
         data: cached.data,
         metadata: {
@@ -52,7 +51,6 @@ class DynamicDataLoader {
     
     // Check if already loading to prevent duplicate requests
     if (this.loadingPromises.has(cacheKey)) {
-      console.log(`⏳ Waiting for existing load: ${request.categoryKey}`);
       const data = await this.loadingPromises.get(cacheKey)!;
       return {
         data,
@@ -76,8 +74,6 @@ class DynamicDataLoader {
       // Cache the result
       this.setCache(cacheKey, data, dataSize);
       
-      console.log(`📊 Dynamic load completed: ${request.categoryKey} (${(dataSize / 1024).toFixed(1)} KB)`);
-      
       return {
         data,
         metadata: {
@@ -96,8 +92,6 @@ class DynamicDataLoader {
    * Preload data for multiple charts
    */
   async preloadChartData(requests: ChartDataRequest[]): Promise<void> {
-    console.log(`🚀 Preloading ${requests.length} chart datasets...`);
-    
     const preloadPromises = requests.map(request => 
       this.loadChartData(request).catch(error => {
         console.warn(`Failed to preload chart data for ${request.categoryKey}:`, error);
@@ -106,7 +100,6 @@ class DynamicDataLoader {
     );
     
     await Promise.allSettled(preloadPromises);
-    console.log(`✅ Chart data preloading completed`);
   }
   
   /**
@@ -123,7 +116,8 @@ class DynamicDataLoader {
       }
     }
     
-    if (cleared > 0) {
+    // Only log cache cleanup in development
+    if (cleared > 0 && import.meta.env.DEV) {
       console.log(`🧹 Cleared ${cleared} expired cache entries`);
     }
   }
@@ -162,26 +156,39 @@ class DynamicDataLoader {
       }));
       
       try {
-        console.log(`🔄 Loading ${columnNames.length} columns in parallel for ${categoryKey}`);
         const columnDataArray = await dataLoader.loadColumns(columnRequests);
         
-        // Convert to expected format
+        // Convert to expected format - use the actual column names from the response
         const columnData: Record<string, any> = {};
-        columnDataArray.forEach((data, index) => {
-          columnData[columnNames[index]] = data;
+        columnDataArray.forEach((typedColumnData) => {
+          columnData[typedColumnData.name] = typedColumnData;
         });
         
-        console.log(`✅ Parallel column loading completed for ${categoryKey}`);
-        return this.formatColumnData(columnData, request);
+        const formatted = this.formatColumnData(columnData, request);
+        return formatted;
       } catch (error) {
         console.warn(`⚠️ Parallel loading failed for ${categoryKey}, falling back to category load:`, error);
         // Fall back to loading entire category
-        return progressiveDataAdapter.loadCategoryData(categoryKey);
+        const categoryData = await progressiveDataAdapter.loadCategoryData(categoryKey);
+        return categoryData;
       }
     } else {
       // For larger requests, load entire category
       console.log(`📦 Loading entire category ${categoryKey} (${columnNames.length} columns)`);
-      return progressiveDataAdapter.loadCategoryData(categoryKey);
+      const categoryData = await progressiveDataAdapter.loadCategoryData(categoryKey);
+      console.log(`🎁 Full category data:`, categoryData);
+      
+      // Filter to only requested columns and format consistently
+      const filteredColumnData: Record<string, any> = {};
+      for (const columnName of columnNames) {
+        if (categoryData[columnName]) {
+          filteredColumnData[columnName] = categoryData[columnName];
+        }
+      }
+      
+      const formatted = this.formatColumnData(filteredColumnData, request);
+      console.log(`🎯 Formatted category data:`, formatted);
+      return formatted;
     }
   }
   
@@ -221,16 +228,44 @@ class DynamicDataLoader {
   
   private formatColumnData(columnData: Record<string, any>, request: ChartDataRequest): any {
     // Transform individual column data into the expected format
-    const columns = Object.entries(columnData).map(([name, data]) => ({
-      name,
-      data,
-      dtype: this.inferDataType(data)
-    }));
-    
-    return {
+    // columnData contains TypedColumnData objects with typed arrays
+    const columns = Object.entries(columnData).map(([name, typedColumnData]) => {
+      // Convert typed array to regular array for legacy compatibility
+      const data = typedColumnData.data ? Array.from(typedColumnData.data) : [];
+      
+      console.log(`🔧 Formatting column ${name}:`, 
+        `type=${typedColumnData.dtype}, data=${Array.isArray(data)} (${data.length} items)`,
+        `sample=[${data.slice(0, 3).join(', ')}...]`);
+      
+      return {
+        name,
+        data,
+        dtype: this.mapDataType(typedColumnData.dtype),
+        categories: typedColumnData.categories
+      };
+    });
+
+    const result = {
       columns,
-      num_rows: columns[0]?.data?.length || 0
+      num_rows: columns[0]?.data?.length || 0,
+      num_cols: columns.length
     };
+    
+    console.log(`✅ Formatted progressive data: ${result.num_rows} rows, ${result.num_cols} columns`);
+    return result;
+  }
+  
+  private mapDataType(progressiveType: string): string {
+    switch (progressiveType) {
+      case 'int32':
+        return 'integer';
+      case 'float32':
+        return 'numeric';
+      case 'categorical':
+        return 'categorical';
+      default:
+        return 'numeric';
+    }
   }
   
   private inferDataType(data: any[]): string {

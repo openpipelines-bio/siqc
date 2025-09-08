@@ -27,6 +27,7 @@ import { createSettingsForm, SettingsFormProvider } from "./components/app/setti
 import { GlobalVisualizationSettings } from "./components/app/global-visualization-settings";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./components/ui/collapsible";
 import { Heatmap } from "~/components/heatmap";
+import { SpatialHeatmap, SpatialBinData } from "./components/spatial-heatmap";
 import { ChartPlaceholder } from "./lib/progressive-loading";
 import { DynamicChart } from "./components/dynamic-chart";
 import { ProgressiveWrapper, AggregatedChart, MultiSourceChart } from "./components/progressive-chart";
@@ -43,7 +44,6 @@ const App: Component = () => {
 
   // read data in memory
   createEffect(async () => {
-    console.log("🚀 Initializing progressive data loader");
     const initStart = performance.now();
     
     await initializeDataLoader();
@@ -61,20 +61,21 @@ const App: Component = () => {
       })
     ];
     
-    console.log("📊 Reading QC categories");
     setReportStructure(await getReportStructure());
 
-    console.log("📈 Reading main dataset");
     const data = await getData();
     setData(data);
     
     // Wait for all preloading to complete (optional, runs in background)
     Promise.all(preloadPromises).then(() => {
-      console.log("✅ All preloading completed");
+      // Preloading completed silently
     });
     
     const initTime = performance.now() - initStart;
-    console.log(`✅ Progressive initialization completed in ${initTime.toFixed(2)}ms`);
+    // Only log initialization time in development
+    if (import.meta.env.DEV) {
+      console.log(`✅ Progressive initialization completed in ${initTime.toFixed(2)}ms`);
+    }
     
     // make sure to set the initial selected samples
     const sampleIds = data.sample_summary_stats?.columns.find(col => col.name === "sample_id")?.categories || [];
@@ -145,6 +146,7 @@ const App: Component = () => {
     
     // Filter the cell_rna_stats data
     const passingIndices = Array.from(passingCellIndices);
+    
     if (passingIndices.length < cellsData.num_rows) {
       result.cell_rna_stats = {
         ...cellsData,
@@ -159,81 +161,117 @@ const App: Component = () => {
     return result;
   });
 
+  // Create a reactive key that changes when filters are applied
+  const chartDataKey = createMemo(() => {
+    const enabled = filters().enabled;
+    const appliedSettings = filters().appliedSettings;
+    const settingsHash = JSON.stringify(appliedSettings);
+    return `${enabled}-${settingsHash}`;
+  });
+
   const binning = form.useStore(state => state.values.binning);
 
-  const binIndices = createMemo(() => {
-    // TODO: Could compute the binIndices on the filteredData, and only apply the QC filtering afterwards to
-    // avoid recomputing the indices every time the filters change.
-    const dataSource = filters().enabled ? fullyFilteredData() : filteredData();
-    if (!dataSource) return undefined;
-    if (!binning().enabled) return undefined;
-
-    // Get the x and y coordinates from the cell_rna_stats data
-    const xCol = dataSource.cell_rna_stats.columns.find(col => col.name === binning().xCol);
-    const yCol = dataSource.cell_rna_stats.columns.find(col => col.name === binning().yCol);
-
-    if (!xCol || !yCol) return undefined;
-    if (xCol.dtype !== "numeric" || yCol.dtype !== "numeric") {
-      console.error("Grid binning requires numeric coordinates");
-      return undefined;
-    }
-    const xCoord = xCol!.data as number[];
-    const yCoord = yCol!.data as number[];
-
-    if (!xCoord || !yCoord) return undefined;
-
-    // Add a small offset to avoid having cells fall exactly on the bin edges
-    const xMin = _.min(xCoord)! - 1e-6;
-    const xMax = _.max(xCoord)! + 1e-6;
-    const yMin = _.min(yCoord)! - 1e-6;
-    const yMax = _.max(yCoord)! + 1e-6;
-    const numBinsX = binning().numBinsX;
-    const numBinsY = binning().numBinsY;
-    const binWidthX = (xMax - xMin) / numBinsX;
-    const binWidthY = (yMax - yMin) / numBinsY;
-
-    // Create regular rectangular grid - bins represent center coordinates
-    const xBinCenters = Array.from({ length: numBinsX }, (_, i) => 
-      xMin + (i + 0.5) * binWidthX
-    );
-    const yBinCenters = Array.from({ length: numBinsY }, (_, i) => 
-      yMin + (i + 0.5) * binWidthY
-    );
-
-    // Create 2D array to store cell indices for each bin
-    const binIndices: number[][][] = Array.from({ length: numBinsY }, () => 
-      Array.from({ length: numBinsX }, () => [])
-    );
-
-    // Assign each cell to its corresponding bin
-    for (let i = 0; i < xCoord.length; i++) {
-      const px = xCoord[i];
-      const py = yCoord[i];
-
-      // Find bin indices
-      const xBin = Math.floor((px - xMin) / binWidthX);
-      const yBin = Math.floor((py - yMin) / binWidthY);
-      
-      // Ensure we're within bounds
-      if (xBin >= 0 && xBin < numBinsX && yBin >= 0 && yBin < numBinsY) {
-        binIndices[yBin][xBin].push(i);
-      }
-    }
-
+  // Lazy spatial binning cache - only computed when first spatial heatmap is rendered
+  const [spatialBinCache, setSpatialBinCache] = createSignal<SpatialBinData | null>(null);
+  const [spatialDataFingerprint, setSpatialDataFingerprint] = createSignal<string>("");
+  
+  const getSpatialBinData = createMemo(() => {
+    if (!binning().enabled) return null;
+    
+    const cellData = fullyFilteredData()?.cell_rna_stats;
+    if (!cellData) return null;
+    
+    const xCoordCol = cellData.columns.find(col => col.name === "x_coord");
+    const yCoordCol = cellData.columns.find(col => col.name === "y_coord");
+    
+    if (!xCoordCol || !yCoordCol) return null;
+    
+    const xCoords = xCoordCol.data as number[];
+    const yCoords = yCoordCol.data as number[];
+    
+    // Create a fingerprint of the current data to detect changes
+    const currentFingerprint = `${xCoords.length}-${cellData.num_rows}`;
+    
+    // Return function to compute bins lazily
     return {
-      xMin,
-      xMax,
-      yMin,
-      yMax,
-      numBinsX,
-      numBinsY,
-      binWidthX,
-      binWidthY,
-      xBinCenters,
-      yBinCenters,
-      binIndices
+      xCoords,
+      yCoords,
+      computeBins: (numBinsX = 50, numBinsY = 50): SpatialBinData => {
+        // Check if we have cached bins for these parameters AND the same data
+        const cached = spatialBinCache();
+        const cachedFingerprint = spatialDataFingerprint();
+        
+        if (cached && 
+            cached.numBinsX === numBinsX && 
+            cached.numBinsY === numBinsY && 
+            cachedFingerprint === currentFingerprint) {
+          console.log(`✅ Using cached spatial bins (${numBinsX}×${numBinsY}, ${xCoords.length.toLocaleString()} cells)`);
+          return cached;
+        }
+        
+        // Invalidate cache if data changed
+        if (cachedFingerprint !== currentFingerprint) {
+          console.log(`🔄 Data changed - invalidating spatial cache`);
+        }
+        
+        // Compute bins for the first time or after data change
+        console.log(`🔄 Computing spatial bins for ${xCoords.length.toLocaleString()} cells (${numBinsX}×${numBinsY} grid)`);
+        
+        const xMin = _.min(xCoords)! - 1e-6;
+        const xMax = _.max(xCoords)! + 1e-6;
+        const yMin = _.min(yCoords)! - 1e-6;
+        const yMax = _.max(yCoords)! + 1e-6;
+
+        const binWidthX = (xMax - xMin) / numBinsX;
+        const binWidthY = (yMax - yMin) / numBinsY;
+
+        const xBinCenters = Array.from({ length: numBinsX }, (_, i) => 
+          xMin + (i + 0.5) * binWidthX
+        );
+        const yBinCenters = Array.from({ length: numBinsY }, (_, i) => 
+          yMin + (i + 0.5) * binWidthY
+        );
+
+        const binIndices: number[][][] = Array.from({ length: numBinsY }, () => 
+          Array.from({ length: numBinsX }, () => [])
+        );
+
+        // Assign each cell to its bin
+        for (let i = 0; i < xCoords.length; i++) {
+          const px = xCoords[i];
+          const py = yCoords[i];
+
+          const xBin = Math.floor((px - xMin) / binWidthX);
+          const yBin = Math.floor((py - yMin) / binWidthY);
+          
+          if (xBin >= 0 && xBin < numBinsX && yBin >= 0 && yBin < numBinsY) {
+            binIndices[yBin][xBin].push(i);
+          }
+        }
+
+        const binData: SpatialBinData = {
+          xMin,
+          xMax,
+          yMin,
+          yMax,
+          numBinsX,
+          numBinsY,
+          binWidthX,
+          binWidthY,
+          xBinCenters,
+          yBinCenters,
+          binIndices
+        };
+
+        // Cache the computed bins and update fingerprint
+        setSpatialBinCache(binData);
+        setSpatialDataFingerprint(currentFingerprint);
+        console.log(`✅ Spatial bins cached (${binData.binIndices.flat().reduce((sum, bin) => sum + bin.length, 0)} cells binned)`);
+        
+        return binData;
+      }
     };
-  })
+  });
 
   // initialise filtersettings
   const [settings, setSettings] = createStore<Settings>(
@@ -242,8 +280,6 @@ const App: Component = () => {
 
   createEffect(() => {
     for (const category of reportStructure().categories) {
-      console.log(`setting ${category.name} filters`);
-
       const columnNames =
         data()?.[category.key].columns.map((x) => x.name) ?? [];
 
@@ -277,13 +313,13 @@ const App: Component = () => {
     // Iterate through all categories and filters
     for (const categoryKey in exportSettings) {
       exportSettings[categoryKey].forEach((filter: FilterSettings) => {
-        // Add min threshold if it exists
-        if (filter.cutoffMin !== undefined) {
+        // Add min threshold if it exists (check for both null and undefined)
+        if (filter.cutoffMin !== undefined && filter.cutoffMin !== null) {
           yamlContent += `min_${filter.field}: ${filter.cutoffMin}\n`;
         }
         
-        // Add max threshold if it exists
-        if (filter.cutoffMax !== undefined) {
+        // Add max threshold if it exists (check for both null and undefined)
+        if (filter.cutoffMax !== undefined && filter.cutoffMax !== null) {
           yamlContent += `max_${filter.field}: ${filter.cutoffMax}\n`;
         }
       });
@@ -490,6 +526,11 @@ const App: Component = () => {
                                     groupBy={currentFilterGroupBy()}
                                     title={`${setting.label} Bar Chart`}
                                     height="400px"
+                                    dataProvider={() => {
+                                      const data = (filters().enabled ? fullyFilteredData() : filteredData())?.[category.key];
+                                      console.log(`📈 Bar chart dataProvider called for ${setting.field}, enabled: ${filters().enabled}, rows: ${data?.num_rows || 'undefined'}`);
+                                      return data;
+                                    }}
                                   >
                                     {(chartData, metadata) => (
                                       <BarPlot
@@ -515,6 +556,7 @@ const App: Component = () => {
                                     groupBy={currentFilterGroupBy()}
                                     title={`${setting.label} Histogram`}
                                     height="400px"
+                                    dataProvider={() => (filters().enabled ? fullyFilteredData() : filteredData())?.[category.key]}
                                   >
                                     {(chartData, metadata) => (
                                       <Histogram
@@ -528,64 +570,62 @@ const App: Component = () => {
                                     )}
                                   </DynamicChart>
                                 </Match>
-                                {/* Spatial visualization with conditional binning */}
+                                {/* Spatial visualization */}
                                 <Match when={setting.type === "histogram" && setting.visualizationType === "spatial"}>
-                                  <Show when={binning().enabled && binIndices()}>
-                                    <DynamicChart
-                                      categoryKey={String(category.key)}
-                                      columnNames={[
-                                        setting.field,
-                                        "x_coord",
-                                        "y_coord",
-                                        ...(currentFilterGroupBy() ? [currentFilterGroupBy()!] : [])
-                                      ]}
-                                      filterSettings={setting}
-                                      groupBy={currentFilterGroupBy()}
-                                      title={`${setting.label} Spatial Heatmap`}
-                                      height="600px"
-                                    >
-                                      {(chartData, metadata) => (
-                                        <Heatmap
-                                          data={chartData}
-                                          binData={binIndices()!}
-                                          filterSettings={{
-                                            ...setting,
-                                            groupBy: currentFilterGroupBy()
-                                          }}
-                                          colorFieldName={setting.field}
-                                        />
-                                      )}
-                                    </DynamicChart>
-                                  </Show>
-                                  
-                                  <Show when={!binning().enabled || !binIndices()}>
-                                    <DynamicChart
-                                      categoryKey="cell_rna_stats"
-                                      columnNames={[
-                                        setting.field,
-                                        "x_coord",
-                                        "y_coord",
-                                        ...(setting.yField ? [setting.yField] : []),
-                                        ...(currentFilterGroupBy() ? [currentFilterGroupBy()!] : [])
-                                      ]}
-                                      filterSettings={setting}
-                                      groupBy={currentFilterGroupBy()}
-                                      title={`${setting.label} Spatial Scatter Plot`}
-                                      height="600px"
-                                    >
-                                      {(chartData, metadata) => (
-                                        <ScatterPlot
-                                          data={chartData}
-                                          filterSettings={{
-                                            ...setting,
-                                            groupBy: currentFilterGroupBy()
-                                          }}
-                                          additionalAxes={category.additionalAxes}
-                                          colorFieldName={setting.field}
-                                        />
-                                      )}
-                                    </DynamicChart>
-                                  </Show>
+                                  <DynamicChart
+                                    categoryKey={String(category.key)}
+                                    columnNames={[
+                                      setting.field,
+                                      "x_coord",
+                                      "y_coord",
+                                      ...(currentFilterGroupBy() ? [currentFilterGroupBy()!] : [])
+                                    ]}
+                                    filterSettings={setting}
+                                    groupBy={currentFilterGroupBy()}
+                                    title={`${setting.label} Spatial Heatmap`}
+                                    height="600px"
+                                    dataProvider={() => (filters().enabled ? fullyFilteredData() : filteredData())?.[category.key]}
+                                  >
+                                    {(chartData, metadata) => {
+                                      // Extract coordinate data for optimization
+                                      const xCoordCol = chartData.columns?.find((col: any) => col.name === "x_coord");
+                                      const yCoordCol = chartData.columns?.find((col: any) => col.name === "y_coord");
+                                      const valueCol = chartData.columns?.find((col: any) => col.name === setting.field);
+                                      const groupCol = currentFilterGroupBy() 
+                                        ? chartData.columns?.find((col: any) => col.name === currentFilterGroupBy())
+                                        : null;
+                                      
+                                      if (xCoordCol && yCoordCol && valueCol) {
+                                        // Get precomputed spatial bins if available
+                                        const spatialData = getSpatialBinData();
+                                        const precomputedBins = spatialData?.computeBins(50, 50);
+                                        
+                                        return (
+                                          <SpatialHeatmap
+                                            xCoords={xCoordCol.data as number[]}
+                                            yCoords={yCoordCol.data as number[]}
+                                            values={valueCol.data as number[]}
+                                            groupIds={groupCol ? groupCol.data as number[] : null}
+                                            title={`${setting.label || setting.field} Spatial Heatmap`}
+                                            colorField={setting.label || setting.field}
+                                            faceted={!!groupCol}
+                                            height="600px"
+                                            numBinsX={50}
+                                            numBinsY={50}
+                                            precomputedBins={precomputedBins}
+                                          />
+                                        );
+                                      }
+                                      
+                                      // Fallback message if data is missing
+                                      return (
+                                        <div class="text-gray-500 p-4">
+                                          Missing coordinate data for spatial visualization. 
+                                          Required: x_coord, y_coord, and {setting.field}.
+                                        </div>
+                                      );
+                                    }}
+                                  </DynamicChart>
                                 </Match>
                               </Switch>
                               <FilterSettingsForm
@@ -622,11 +662,22 @@ const App: Component = () => {
                 {(field) => (
                   <button 
                     onClick={() => {
-                      // Take a snapshot of the current settings and save it as the applied settings
-                      field().handleChange({
-                        enabled: true,
-                        appliedSettings: JSON.parse(JSON.stringify(settings))
-                      });
+                      // Force all input fields to commit their values by blurring any focused element
+                      const activeElement = document.activeElement as HTMLElement;
+                      if (activeElement && activeElement.blur) {
+                        activeElement.blur();
+                      }
+                      
+                      // Use setTimeout to ensure blur events complete before capturing settings
+                      setTimeout(() => {
+                        const settingsSnapshot = JSON.parse(JSON.stringify(settings));
+                        
+                        // Take a snapshot of the current settings and save it as the applied settings
+                        field().handleChange({
+                          enabled: true,
+                          appliedSettings: settingsSnapshot
+                        });
+                      }, 100); // Short delay to allow blur events to process
                     }}
                     class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
                   >

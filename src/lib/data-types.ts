@@ -5,6 +5,14 @@ export interface DataHeader {
   formatVersion: number;
   rowCount: number;
   columns: ColumnInfo[];
+  categories?: { [key: string]: CategoryInfo };
+}
+
+export interface CategoryInfo {
+  name: string;
+  key: string;
+  additionalAxes: boolean;
+  defaultFilters: FilterSettings[];
 }
 
 export interface ColumnInfo {
@@ -17,7 +25,13 @@ export interface ColumnInfo {
 }
 
 export interface FilterSettings {
+  type: "histogram" | "bar" | "scatter";
+  visualizationType?: "histogram" | "spatial";
   field: string;
+  label?: string;
+  yField?: string;
+  yLabel?: string;
+  description?: string;
   cutoffMin?: number;
   cutoffMax?: number;
   groupBy?: string;

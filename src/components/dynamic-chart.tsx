@@ -22,7 +22,7 @@
  * - Viewport-based loading for smooth UX
  */
 
-import { JSX, Show, createSignal, createEffect } from 'solid-js';
+import { JSX, Show, createSignal, createEffect, createMemo, onCleanup } from 'solid-js';
 import { createViewportLoader, ChartPlaceholder, ChartErrorBoundary } from '../lib/progressive-loading';
 import { dynamicDataLoader, ChartDataRequest, ChartDataResponse } from '../lib/dynamic-data-loader';
 import { FilterSettings } from '../types';
@@ -37,6 +37,8 @@ interface DynamicChartProps {
   height?: string;
   children: (data: any, metadata: ChartDataResponse['metadata']) => JSX.Element;
   fallback?: JSX.Element;
+  dataProvider?: () => any; // Optional data provider for filtered data
+  key?: string; // Force re-creation when this changes
 }
 
 /**
@@ -158,12 +160,50 @@ export function DynamicChart(props: DynamicChartProps): JSX.Element {
   // Generate unique chart ID for performance tracking
   const chartId = `chart-${props.categoryKey}-${props.columnNames.join('-')}-${Date.now()}`;
   
-  // Create the data loading function with performance tracking
-  const loadData = async (): Promise<ChartDataResponse> => {
-    const chartMetric = startChartMetric(chartId, props.title);
-    markChartDataLoadStart(chartId);
-    
+  const [data, setData] = createSignal<ChartDataResponse | null>(null);
+  const [loading, setLoading] = createSignal(false);
+  const [error, setError] = createSignal<Error | null>(null);
+  const [element, setElement] = createSignal<Element | null>(null);
+  const [hasLoaded, setHasLoaded] = createSignal(false);
+
+  // Function to load or get data
+  const loadChartData = async (): Promise<ChartDataResponse | null> => {
     try {
+      setLoading(true);
+      setError(null);
+      
+      const chartMetric = startChartMetric(chartId, props.title);
+      markChartDataLoadStart(chartId);
+      
+      // Use data provider if available (for filtered data)
+      if (props.dataProvider) {
+        const startTime = performance.now();
+        const providedData = props.dataProvider();
+        const loadTime = performance.now() - startTime;
+        
+        // Extract requested columns from provided data
+        const filteredData: any = { columns: [] };
+        if (providedData && providedData.columns) {
+          filteredData.columns = providedData.columns.filter((col: any) => 
+            props.columnNames.includes(col.name)
+          );
+          filteredData.num_rows = providedData.num_rows;
+        }
+        
+        markChartDataLoadEnd(chartId, false);
+        
+        return {
+          data: filteredData,
+          metadata: {
+            loadTime,
+            dataSize: JSON.stringify(filteredData).length,
+            cacheHit: false,
+            source: 'filtered' as any
+          }
+        };
+      }
+      
+      // Fallback to dynamic loading
       const request: ChartDataRequest = {
         categoryKey: props.categoryKey,
         columnNames: props.columnNames,
@@ -175,18 +215,55 @@ export function DynamicChart(props: DynamicChartProps): JSX.Element {
       markChartDataLoadEnd(chartId, response.metadata.cacheHit);
       
       return response;
-    } catch (error) {
-      console.error(`❌ Chart data loading failed for ${props.title}:`, error);
-      throw error;
+    } catch (err) {
+      console.error(`❌ Chart data loading failed for ${props.title}:`, err);
+      setError(err as Error);
+      return null;
+    } finally {
+      setLoading(false);
     }
   };
-  
-  const { data, loading, error, setElement } = createViewportLoader(loadData, { threshold: 0.1 });
-  
+
+  // Set up intersection observer for viewport loading
+  createEffect(() => {
+    const el = element();
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (entry.isIntersecting && !hasLoaded()) {
+          setHasLoaded(true);
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(el);
+
+    onCleanup(() => {
+      observer.disconnect();
+    });
+  });
+
+  // React to data provider changes
+  createEffect(async () => {
+    if (!hasLoaded()) return;
+    
+    // Track dependencies explicitly
+    if (props.dataProvider) {
+      // Call the dataProvider to create a dependency
+      const providerData = props.dataProvider();
+    }
+    
+    const result = await loadChartData();
+    setData(result);
+  });
+
   const retryLoad = () => {
-    // Force reload by refreshing the page for now
-    // TODO: Implement proper retry mechanism
-    window.location.reload();
+    setError(null);
+    setData(null);
+    loadChartData().then(setData);
   };
   
   return (

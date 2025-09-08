@@ -77,17 +77,18 @@ export function calculateQcPassCells(data: RawData | undefined, cellRnaFilters: 
     const cutoffMin = filterSettings.cutoffMin;
     const cutoffMax = filterSettings.cutoffMax;
     
-    // Skip filters with no cutoffs
-    if (cutoffMin === undefined && cutoffMax === undefined) continue;
+    // Skip filters with no cutoffs (check for both null and undefined)
+    if ((cutoffMin === undefined || cutoffMin === null) && 
+        (cutoffMax === undefined || cutoffMax === null)) continue;
     
     // Apply min/max cutoffs more efficiently
     for (let i = 0; i < numCells; i++) {
       // Skip cells that already failed
       if (!passFilter[i]) continue;
       
-      // Check cutoffs
-      if ((cutoffMin !== undefined && values[i] < cutoffMin) ||
-          (cutoffMax !== undefined && values[i] > cutoffMax)) {
+      // Check cutoffs (check for both null and undefined)
+      if ((cutoffMin !== undefined && cutoffMin !== null && values[i] < cutoffMin) ||
+          (cutoffMax !== undefined && cutoffMax !== null && values[i] > cutoffMax)) {
         passFilter[i] = false;
       }
     }
@@ -107,7 +108,8 @@ export function getPassingCellIndices(cellsData: any, cellFilters: FilterSetting
   
   // Apply each filter
   for (const filter of cellFilters) {
-    if (filter.cutoffMin !== undefined || filter.cutoffMax !== undefined) {
+    if ((filter.cutoffMin !== undefined && filter.cutoffMin !== null) || 
+        (filter.cutoffMax !== undefined && filter.cutoffMax !== null)) {
       const columnIndex: number = cellsData.columns.findIndex((col: { name: string }) => col.name === filter.field);
       if (columnIndex !== -1) {
         const columnData = cellsData.columns[columnIndex].data;
@@ -117,8 +119,8 @@ export function getPassingCellIndices(cellsData: any, cellFilters: FilterSetting
           if (!passingCellIndices.has(i)) continue; // Skip already filtered
           
           const value = columnData[i];
-          if ((filter.cutoffMin !== undefined && value < filter.cutoffMin) || 
-              (filter.cutoffMax !== undefined && value > filter.cutoffMax)) {
+          if ((filter.cutoffMin !== undefined && filter.cutoffMin !== null && value < filter.cutoffMin) || 
+              (filter.cutoffMax !== undefined && filter.cutoffMax !== null && value > filter.cutoffMax)) {
             passingCellIndices.delete(i);
           }
         }
