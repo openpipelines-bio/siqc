@@ -1,7 +1,5 @@
 # QC Report Generator
 
-[![npm version](https://badge.fury.io/js/qc-report-generator.svg)](https://badge.fury.io/js/qc-report-generator)
-
 Generate interactive QC reports from scientific data with progressive loading and spatial visualization. Perfect for single-cell genomics, spatial transcriptomics, and other large-scale biological datasets.
 
 ## Features
@@ -16,21 +14,23 @@ Generate interactive QC reports from scientific data with progressive loading an
 
 ## Installation
 
-Install globally to use the `qc-report` command anywhere:
+Install globally from the git repository:
 
 ```bash
-npm install -g qc-report-generator
+# Install from git repository
+npm install -g git+https://github.com/openpipelines-bio/qc_report_generator.git
 # or
-pnpm install -g qc-report-generator
-# or  
-yarn global add qc-report-generator
+pnpm install -g git+https://github.com/openpipelines-bio/qc_report_generator.git
 ```
 
-Or install locally in your project:
+Or clone and install locally for development:
 
 ```bash
-npm install qc-report-generator
-npx qc-report --help
+git clone https://github.com/openpipelines-bio/qc_report_generator.git
+cd qc_report_generator
+pnpm install
+pnpm run build
+# CLI is now available as: node cli.js
 ```
 
 ## Quick Start
@@ -227,6 +227,9 @@ git clone https://github.com/openpipelines-bio/qc_report_generator.git
 cd qc_report_generator
 pnpm install
 
+# Generate test data (requires R with required packages)
+Rscript scripts/generate_data.R
+
 # Development server
 pnpm dev
 
@@ -235,6 +238,9 @@ pnpm build
 
 # Test CLI locally  
 node cli.js --help
+
+# Test with generated data
+node cli.js --data resources_test/sc_dataset/data.json --structure resources_test/sc_dataset/structure.json --output test-report.html
 ```
 
 ### Architecture
@@ -247,6 +253,21 @@ node cli.js --help
 ## Examples
 
 See the `resources_test/` directory for example datasets and structures.
+
+### Generating Test Data
+
+Use the included R script to generate sample datasets for testing:
+
+```bash
+# Generates multiple test datasets in resources_test/
+Rscript scripts/generate_data.R
+```
+
+This creates example data for:
+- `sc_dataset/` - Small single-cell dataset (~20 cells)
+- `sc_dataset_large/` - Large single-cell dataset (~1.2M cells)  
+- `xenium_dataset/` - Small Xenium spatial dataset
+- `xenium_dataset_large/` - Large Xenium spatial dataset (~1.2M cells)
 
 ## Contributing
 

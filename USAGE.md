@@ -4,12 +4,12 @@ The QC Report Generator is now available as an installable CLI package! This gui
 
 ## Installation
 
-Install globally to use the `qc-report` command anywhere:
+Install globally from the git repository:
 
 ```bash
-npm install -g qc-report-generator
+npm install -g git+https://github.com/openpipelines-bio/qc_report_generator.git
 # or
-pnpm install -g qc-report-generator
+pnpm install -g git+https://github.com/openpipelines-bio/qc_report_generator.git
 ```
 
 Verify your installation:
