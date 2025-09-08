@@ -11,9 +11,6 @@ importers:
       '@kobalte/core':
         specifier: ^0.13.7
         version: 0.13.7(solid-js@1.9.3)
-      '@msgpack/msgpack':
-        specifier: 3.0.0-beta3
-        version: 3.0.0-beta3
       '@ralphsmith80/solid-plotly.js':
         specifier: ^0.0.1
         version: 0.0.1(plotly.js@2.35.3(mapbox-gl@1.13.3)(webpack@5.97.1))(solid-js@1.9.3)
@@ -437,10 +434,6 @@ packages:
   '@maplibre/maplibre-gl-style-spec@20.4.0':
     resolution: {integrity: sha512-AzBy3095fTFPjDjmWpR2w6HVRAZJ6hQZUCwk5Plz6EyfnfuQW1odeW5i2Ai47Y6TBA2hQnC+azscjBSALpaWgw==}
     hasBin: true
-
-  '@msgpack/msgpack@3.0.0-beta3':
-    resolution: {integrity: sha512-LZYWBmrkKO0quyjnJCeSaqHOcsuZUvE+hlIYRqFc0qI27dLnsOdnv8Fsj2cyitzQTJZmCPm53vZ/P8QTH7E84A==}
-    engines: {node: '>= 18'}
 
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
@@ -2791,8 +2784,6 @@ snapshots:
       quickselect: 2.0.0
       rw: 1.3.3
       tinyqueue: 3.0.0
-
-  '@msgpack/msgpack@3.0.0-beta3': {}
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:

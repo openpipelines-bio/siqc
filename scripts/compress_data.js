@@ -2,67 +2,54 @@ import fs from "fs";
 import pako from "pako";
 
 /**
- * New columnar binary format data compression
- * Replaces the old msgpack approach with typed binary arrays
+ * Data Compression Library
+ * 
+ * Columnar binary format data compression using typed binary arrays
+ * 
+ * This module provides library functions for data compression.
+ * Use the main CLI (cli.js) for command-line interface.
  */
 
-// Get input and output file paths from command line arguments
-const inputFilePath = process.argv[2];
-const outputFilePath = process.argv[3];
-const structureFilePath = process.argv[4]; // Optional structure file
-
-if (!inputFilePath || !outputFilePath) {
-  console.error("Usage: node compress_data.js <data.json> <output.ts> [structure.json]");
-  console.error("For TypeScript output: node compress_data.js data.json src/data/dataset.ts");
-  console.error("For binary payload: node compress_data.js data.json payload.txt structure.json");
-  process.exit(1);
-}
-
-// Determine output format based on file extension
-const isTypeScriptOutput = outputFilePath.endsWith('.ts');
-const isBinaryOutput = !isTypeScriptOutput && structureFilePath;
-
-if (isBinaryOutput && !structureFilePath) {
-  console.error("Structure file required for binary output format");
-  process.exit(1);
-}
-
-// Create output directory if it doesn't exist
-const outputDir = outputFilePath.substring(0, outputFilePath.lastIndexOf("/"));
-if (outputDir && !fs.existsSync(outputDir)) {
-  fs.mkdirSync(outputDir, { recursive: true });
-}
-
-console.log(`Compressing ${inputFilePath}...`);
-const data = JSON.parse(fs.readFileSync(inputFilePath, "utf8"));
-
-if (isTypeScriptOutput) {
-  // Legacy TypeScript module output (backward compatibility)
-  const { encode } = await import("@msgpack/msgpack");
-  const compressed = pako.gzip(encode(data));
-  const encoded = Buffer.from(compressed).toString("base64");
-  fs.writeFileSync(outputFilePath, `export const compressed_data = "${encoded}";`);
-  console.log(`Legacy TypeScript module written to ${outputFilePath}`);
-  
-} else if (isBinaryOutput) {
-  // New columnar binary format
+/**
+ * Compress data to binary payload format
+ */
+export function compressToBinary(inputFilePath, outputFilePath, structureFilePath) {
+  const data = JSON.parse(fs.readFileSync(inputFilePath, "utf8"));
   const structure = JSON.parse(fs.readFileSync(structureFilePath, "utf8"));
   const binaryPayload = packColumnaryBinary(data, structure);
-  fs.writeFileSync(outputFilePath, binaryPayload);
-  console.log(`Binary payload written to ${outputFilePath}`);
   
-} else {
-  // Default: assume base64 text output
+  // Create output directory if it doesn't exist
+  const outputDir = outputFilePath.substring(0, outputFilePath.lastIndexOf("/"));
+  if (outputDir && !fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
+  
+  fs.writeFileSync(outputFilePath, binaryPayload);
+  return outputFilePath;
+}
+
+/**
+ * Compress data to base64 format
+ */
+export function compressToBase64(inputFilePath, outputFilePath) {
+  const data = JSON.parse(fs.readFileSync(inputFilePath, "utf8"));
   const compressed = pako.gzip(JSON.stringify(data));
   const encoded = Buffer.from(compressed).toString("base64");
+  
+  // Create output directory if it doesn't exist
+  const outputDir = outputFilePath.substring(0, outputFilePath.lastIndexOf("/"));
+  if (outputDir && !fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
+  
   fs.writeFileSync(outputFilePath, encoded);
-  console.log(`Base64 data written to ${outputFilePath}`);
+  return outputFilePath;
 }
 
 /**
  * Pack data into columnar binary format with gzip compression
  */
-function packColumnaryBinary(data, structure) {
+export function packColumnaryBinary(data, structure) {
   console.log('Using new columnar binary format...');
   
   // Create header with metadata

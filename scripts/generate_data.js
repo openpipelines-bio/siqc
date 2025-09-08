@@ -1,14 +1,11 @@
-#!/usr/bin/env node
-
 /**
- * QC Data Generator - Node.js Port
+ * QC Data Generator - Node.js Library
  * 
  * Generates synthetic QC datasets for testing and development.
  * Supports single-cell and spatial (Xenium) datasets.
  * 
- * Usage:
- *   node scripts/generate_data.js <dataset_type> <output_dir>
- *   npm run generate_data <dataset_type> <output_dir>
+ * This module provides library functions for data generation.
+ * Use the main CLI (cli.js) for command-line interface.
  */
 
 import fs from 'fs';
@@ -712,66 +709,6 @@ const generators = {
     structureFun: generateXeniumStructure
   }
 };
-
-// Main execution
-function main() {
-  const args = process.argv.slice(2);
-  
-  if (args.length < 2 || args.includes('--help') || args.includes('-h')) {
-    if (args.includes('--help') || args.includes('-h')) {
-      console.log('Usage: node generate_data.js <dataset_type> <output_dir>');
-      console.log('');
-      console.log('Dataset types:');
-      console.log('  sc         - Single-cell RNA-seq dataset (default size)');
-      console.log('  sc_large   - Large single-cell RNA-seq dataset');
-      console.log('  xenium     - Xenium spatial dataset (default size)');
-      console.log('  xenium_large - Large Xenium spatial dataset');
-      console.log('');
-      console.log('Example: node generate_data.js sc resources_test/sc_dataset');
-      process.exit(0);
-    } else {
-      console.error('Usage: node generate_data.js <dataset_type> <output_dir>');
-      console.error('Dataset types: sc, sc_large, xenium, xenium_large');
-      console.error('Use --help for more information');
-      process.exit(1);
-    }
-  }
-
-  const [datasetType, outputDir] = args;
-
-  if (!generators[datasetType]) {
-    console.error(`Invalid dataset type: ${datasetType}`);
-    console.error('Available types:', Object.keys(generators).join(', '));
-    process.exit(1);
-  }
-
-  // Create output directory
-  if (!fs.existsSync(outputDir)) {
-    fs.mkdirSync(outputDir, { recursive: true });
-  }
-
-  const generator = generators[datasetType];
-  const dataPath = path.join(outputDir, 'data.json');
-  const structurePath = path.join(outputDir, 'structure.json');
-
-  console.log(`Generating data for ${generator.label}...`);
-  const data = generator.dataFun();
-
-  console.log(`Generating structure for ${generator.label}...`);
-  const structure = generator.structureFun();
-
-  console.log('Writing data and structure to JSON files...');
-  fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
-  fs.writeFileSync(structurePath, JSON.stringify(structure, null, 2));
-
-  console.log(`${generator.label} dataset generated successfully.`);
-  console.log(`  Data: ${dataPath}`);
-  console.log(`  Structure: ${structurePath}\n`);
-}
-
-if (import.meta.url === `file://${process.argv[1]}`) {
-  main();
-}
 
 export {
   generateScDataset,

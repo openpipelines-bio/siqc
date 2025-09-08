@@ -23,11 +23,10 @@
     "dev": "vite",
     "build": "vite build",
     "serve": "vite preview",
-    
     "cli": "node cli.js",
     "generate-test-data": "node cli.js generate-test-data",
     "render": "node cli.js render",
-    
+    "compress": "node cli.js compress",
     "prettier": "prettier -w \"src/**/*.{js,ts,json,css,tsx,jsx}\" \"*.{js,ts,mjs}\"",
     "clean": "rm -rf dist .cache .temp node_modules src/data",
     "prepublishOnly": "npm run build"
@@ -76,7 +75,6 @@
   },
   "dependencies": {
     "@kobalte/core": "^0.13.7",
-    "@msgpack/msgpack": "3.0.0-beta3",
     "@ralphsmith80/solid-plotly.js": "^0.0.1",
     "@solid-primitives/scheduled": "^1.5.0",
     "@tanstack/solid-form": "^1.12.3",

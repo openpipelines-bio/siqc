@@ -14,6 +14,7 @@ import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { compressToBinary } from './scripts/compress_data.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -149,6 +150,69 @@ cli.command({
   handler: async (argv) => {
     try {
       await renderReport(argv);
+    } catch (error) {
+      console.error('❌ Error:', error.message);
+      process.exit(1);
+    }
+  }
+});
+
+// Compress Data Command
+cli.command({
+  command: 'compress',
+  desc: 'Compress data to binary payload format',
+  builder: (yargs) => {
+    return yargs
+      .option('data', {
+        alias: 'd',
+        describe: 'Path to input data JSON file',
+        type: 'string',
+        demandOption: true,
+        normalize: true,
+        coerce: (arg) => {
+          const resolved = path.resolve(arg);
+          if (!fs.existsSync(resolved)) {
+            throw new Error(`Data file not found: ${resolved}`);
+          }
+          return resolved;
+        }
+      })
+      .option('structure', {
+        alias: 's',
+        describe: 'Path to structure JSON file',
+        type: 'string',
+        demandOption: true,
+        normalize: true,
+        coerce: (arg) => {
+          const resolved = path.resolve(arg);
+          if (!fs.existsSync(resolved)) {
+            throw new Error(`Structure file not found: ${resolved}`);
+          }
+          return resolved;
+        }
+      })
+      .option('output', {
+        alias: 'o',
+        describe: 'Output binary payload file path',
+        type: 'string',
+        demandOption: true,
+        normalize: true
+      })
+      .option('verbose', {
+        describe: 'Enable verbose logging',
+        type: 'boolean',
+        default: false
+      })
+      .example([
+        ['$0 compress --data data.json --structure structure.json --output payload.bin', 'Compress to binary payload'],
+        ['$0 compress -d data.json -s structure.json -o report-payload.bin --verbose', 'Compress with verbose output']
+      ])
+      .group(['data', 'structure', 'output'], 'Required Options:')
+      .group(['verbose'], 'Optional Settings:');
+  },
+  handler: async (argv) => {
+    try {
+      await compressData(argv);
     } catch (error) {
       console.error('❌ Error:', error.message);
       process.exit(1);
@@ -363,6 +427,33 @@ async function renderReport(options) {
 
   } catch (error) {
     throw new Error(`Render failed: ${error.message}`);
+  }
+}
+
+async function compressData(options) {
+  const { data, structure, output, verbose } = options;
+  
+  if (verbose) {
+    console.log(`🗜️  Compressing data from ${data}...`);
+    console.log(`� Structure: ${structure}`);
+    console.log(`� Output: ${output}`);
+  } else {
+    console.log(`🗜️  Compressing data to binary payload...`);
+  }
+
+  try {
+    const result = compressToBinary(data, output, structure);
+    
+    console.log(`✅ Binary payload created successfully: ${result}`);
+    
+    if (verbose) {
+      const stats = fs.statSync(result);
+      const sizeMB = (stats.size / 1024 / 1024).toFixed(2);
+      console.log(`📊 Payload size: ${sizeMB} MB`);
+    }
+    
+  } catch (error) {
+    throw new Error(`Compression failed: ${error.message}`);
   }
 }
 
