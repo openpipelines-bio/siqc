@@ -245,8 +245,9 @@ git clone https://github.com/openpipelines-bio/qc_report_generator.git
 cd qc_report_generator
 pnpm install
 
-# Generate test data
-npm run generate_data:all
+# Generate test data using the CLI
+pnpm generate-test-data --type sc --output resources_test/sc_dataset
+pnpm generate-test-data --type xenium --output resources_test/xenium_dataset
 
 # Development server
 pnpm dev
@@ -259,7 +260,7 @@ node cli.js --help
 ```
 
 # Test with generated data
-node cli.js --data resources_test/sc_dataset/data.json --structure resources_test/sc_dataset/structure.json --output test-report.html
+pnpm render --data resources_test/sc_dataset/data.json --structure resources_test/sc_dataset/structure.json --output test-report.html
 ```
 
 ### Architecture
@@ -275,18 +276,21 @@ See the `resources_test/` directory for example datasets and structures.
 
 ### Generating Test Data
 
-Use the included Node.js scripts to generate sample datasets for testing:
+Use the unified CLI to generate sample datasets for testing:
 
 ```bash
-# Generate all test datasets at once
-npm run generate_data:all
+# Generate specific dataset types
+pnpm generate-test-data --type sc --output resources_test/sc_dataset
+pnpm generate-test-data --type xenium --output resources_test/xenium_dataset
+pnpm generate-test-data --type sc_large --output resources_test/sc_dataset_large
+pnpm generate-test-data --type xenium_large --output resources_test/xenium_dataset_large
 
-# Generate a specific dataset type
-npm run generate_data sc resources_test/sc_dataset
-npm run generate_data xenium resources_test/xenium_dataset
+# Or use the npm script aliases
+pnpm run generate-test-data --type sc --output resources_test/sc_dataset
 
-# See all available options
-npm run generate_data -- --help
+# See all available commands and options
+node cli.js --help
+pnpm generate-test-data --help
 ```
 
 The scripts create example data for:

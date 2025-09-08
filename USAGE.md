@@ -151,8 +151,8 @@ pnpm install
 node cli.js --help
 
 # Generate test data and render report
-node cli.js generate-test-data --type sc --output ./test-data
-node cli.js render --data ./test-data/data.json --structure ./test-data/structure.json --output ./test-report.html
+pnpm generate-test-data --type sc --output ./test-data
+pnpm render --data ./test-data/data.json --structure ./test-data/structure.json --output ./test-report.html
 ```
 
 ## File Requirements

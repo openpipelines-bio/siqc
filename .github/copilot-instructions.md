@@ -16,15 +16,16 @@ This is a **progressive loading QC report generator** for scientific data analys
 
 ### Development Setup
 ```bash
-# Generate test data (requires R)
-Rscript scripts/generate_data.R
+# Generate test data using unified CLI
+pnpm generate-test-data --type sc --output resources_test/sc_dataset
+pnpm generate-test-data --type xenium --output resources_test/xenium_dataset
 
 # Development with environment variables
 cp .env.example .env  # Configure data paths
 pnpm dev
 
 # Test CLI locally
-node cli.js --data resources_test/sc_dataset/data.json --structure resources_test/sc_dataset/structure.json --output test.html
+pnpm render --data resources_test/sc_dataset/data.json --structure resources_test/sc_dataset/structure.json --output test.html
 ```
 
 ### Build Process
