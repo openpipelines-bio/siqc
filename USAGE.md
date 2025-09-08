@@ -19,18 +19,19 @@ qc-report --help
 
 ## Quick Start
 
-### Method 1: Simple directory-based workflow (Recommended)
+### Method 1: Simple workflow (Recommended)
 
-1. **Prepare your data directory:**
+1. **Prepare your data files:**
 ```bash
 mkdir my-experiment/
+# Copy your data files with specific names
 cp your-data.json my-experiment/data.json
 cp your-structure.json my-experiment/structure.json
 ```
 
 2. **Generate the report:**
 ```bash
-qc-report --data-dir ./my-experiment/ --output ./my-experiment-report.html
+qc-report --data ./my-experiment/data.json --structure ./my-experiment/structure.json --output ./my-experiment-report.html
 ```
 
 3. **Open the report:**
@@ -40,19 +41,49 @@ open my-experiment-report.html  # macOS
 xdg-open my-experiment-report.html  # Linux
 ```
 
-### Method 2: Specify individual files
-
-```bash
-qc-report --data ./path/to/data.json --structure ./path/to/structure.json --output ./my-report.html
-```
-
-### Method 3: Batch processing multiple experiments
+### Method 2: Batch processing multiple experiments
 
 ```bash
 # Process multiple experiments
 for experiment in exp1 exp2 exp3; do
-  qc-report --data-dir ./experiments/$experiment/ --output ./reports/$experiment-report.html
+  qc-report \
+    --data ./experiments/$experiment/data.json \
+    --structure ./experiments/$experiment/structure.json \
+    --output ./reports/$experiment-report.html
 done
+```
+
+## CLI Reference
+
+### Command Syntax
+
+```bash
+qc-report --data <file> --structure <file> --output <file> [options]
+```
+
+### Required Arguments
+
+- `--data <file>`: Path to your data.json file
+- `--structure <file>`: Path to your structure.json file  
+- `--output <file>`: Output HTML file path
+
+### Optional Arguments
+
+- `--payload <file>`: Use existing compressed payload file (skips compression)
+- `--no-auto-generate`: Don't auto-generate payload if missing
+- `--help`: Show help message
+
+### Examples
+
+```bash
+# Basic usage
+qc-report --data ./data.json --structure ./structure.json --output ./report.html
+
+# Use cached payload for faster builds
+qc-report --data ./data.json --structure ./structure.json --output ./report.html --payload ./cached.bin
+
+# Reuse existing payload only (fastest)
+qc-report --payload ./cached.bin --output ./report.html --no-auto-generate
 ```
 
 ## Advanced Usage
@@ -63,10 +94,10 @@ For large datasets, you can cache the compressed payload to speed up repeated bu
 
 ```bash
 # First build - generates and caches payload
-qc-report --data-dir ./large-dataset/ --payload ./cache/large-payload.bin
+qc-report --data ./large-dataset/data.json --structure ./large-dataset/structure.json --output ./report1.html --payload ./cache/large-payload.bin
 
-# Subsequent builds with different structure - reuses cached payload (much faster)
-qc-report --payload ./cache/large-payload.bin --structure ./new-structure.json --no-auto-generate
+# Subsequent builds with same data - reuses cached payload (much faster)
+qc-report --payload ./cache/large-payload.bin --output ./report2.html --no-auto-generate
 ```
 
 ### Development/Local Installation
@@ -82,27 +113,27 @@ pnpm install
 # Test the CLI locally
 node cli.js --help
 
-# Run installation test
-npm run test:install
-
-# Use local version
-node cli.js --data-dir ./resources_test/sc_dataset_small/ --output ./test-report.html
+# Use local version with test data
+node cli.js --data ./resources_test/sc_dataset_small/data.json --structure ./resources_test/sc_dataset_small/structure.json --output ./test-report.html
 ```
-- **Output**: `dist/index.html`
 
 ## File Requirements
 
 ### data.json
-Your data file should contain the QC metrics in the expected format:
+
+Your data file should contain the QC metrics in columnar format:
 
 ```json
 {
   "cell_rna_stats": {
+    "num_rows": 1000,
+    "num_cols": 4,
     "columns": [
       {
         "name": "sample_id",
         "dtype": "categorical", 
-        "data": [0, 0, 1, 1, ...]
+        "data": [0, 0, 1, 1, ...],
+        "categories": ["sample_1", "sample_2"]
       },
       {
         "name": "total_counts",
@@ -124,7 +155,14 @@ Your data file should contain the QC metrics in the expected format:
 }
 ```
 
+**Data Types Supported:**
+- `categorical`: Integer indices with `categories` array (for sample IDs, cell types, etc.)
+- `integer`: Whole numbers (counts, gene numbers, etc.)
+- `numeric`: Floating point numbers (coordinates, fractions, etc.)
+- `boolean`: True/false values
+
 ### structure.json
+
 Your structure file should define the report layout and filters:
 
 ```json
@@ -140,7 +178,15 @@ Your structure file should define the report layout and filters:
           "field": "total_counts",
           "label": "total counts",
           "nBins": 50,
-          "groupBy": "sample_id"
+          "groupBy": "sample_id",
+          "cutoffMin": null,
+          "cutoffMax": null
+        },
+        {
+          "type": "histogram",
+          "visualizationType": "spatial",
+          "field": "total_counts",
+          "label": "spatial expression"
         }
       ]
     }
@@ -148,11 +194,19 @@ Your structure file should define the report layout and filters:
 }
 ```
 
+**Visualization Types:**
+- `histogram`: Distribution plots with filtering capabilities
+- `bar`: Bar charts for categorical data
+- `scatter`: 2D scatter plots (use `yField` parameter)
+- `spatial`: Spatial plots (use `visualizationType: "spatial"`)
+
 ## Environment Variables
 
-- `QC_DATA_PATH`: Path to your data.json file (default: `data/data.json`)
-- `QC_STRUCTURE_PATH`: Path to your structure.json file (default: `data/structure.json`)
-- `QC_PAYLOAD_PATH`: Path to store/read compressed payload (default: `qc-report-payload.bin`)
+You can set these environment variables to customize default behavior:
+
+- `QC_DATA_PATH`: Default path to data.json file 
+- `QC_STRUCTURE_PATH`: Default path to structure.json file
+- `QC_PAYLOAD_PATH`: Default path for compressed payload file
 - `QC_AUTO_GENERATE`: Whether to auto-generate payload from data files (default: `true`)
 
 ## Output

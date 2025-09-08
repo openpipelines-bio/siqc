@@ -9,7 +9,7 @@ Generate interactive QC reports from scientific data with progressive loading an
 - 🚀 **Progressive Loading**: Large datasets (millions of cells) load incrementally without blocking the UI
 - 📊 **Interactive Visualizations**: Histograms, scatter plots, heatmaps, and spatial plots with Plotly.js
 - 🗜️ **Efficient Compression**: Binary data format with gzip compression for optimal file sizes
-- � **Standalone Reports**: Single HTML file with no external dependencies
+- 📄 **Standalone Reports**: Single HTML file with no external dependencies
 - 🎯 **Spatial Analysis**: Advanced spatial plotting with faceting and optimization
 - ⚡ **Performance Optimized**: Web Workers, typed arrays, and multi-scale rendering
 - 🛠️ **Easy CLI**: Simple command-line interface for quick report generation
@@ -37,7 +37,7 @@ npx qc-report --help
 
 ### 1. Prepare Your Data
 
-Create a directory with your data files:
+Organize your data files:
 
 ```bash
 mkdir my-qc-data/
@@ -56,48 +56,37 @@ qc-report --data ./my-qc-data/data.json --structure ./my-qc-data/structure.json 
 
 Open the generated HTML file in any modern web browser. No server required!
 
-## Usage
+## CLI Usage
 
-### Basic Commands
+### Command Syntax
 
 ```bash
-# Generate report (all arguments required)
+qc-report --data <file> --structure <file> --output <file> [options]
+```
+
+### Required Arguments
+
+- `--data <file>`: Path to the data.json file
+- `--structure <file>`: Path to the structure.json file  
+- `--output <file>`: Output HTML file path
+
+### Optional Arguments
+
+- `--payload <file>`: Use existing compressed payload file (skips compression step)
+- `--no-auto-generate`: Don't auto-generate payload if missing
+- `--help`: Show help message
+
+### Examples
+
+```bash
+# Basic usage
 qc-report --data ./data.json --structure ./structure.json --output ./report.html
 
-# Use existing compressed payload (faster for repeated builds)
-qc-report --payload ./cached-payload.bin --output ./report.html
-```
+# Use cached payload for faster builds
+qc-report --data ./data.json --structure ./structure.json --output ./report.html --payload ./cached-payload.bin
 
-### Advanced Options
-
-```bash
-qc-report [options]
-
-Required arguments:
-  --data       Path to data JSON file
-  --structure  Path to structure JSON file  
-  --output     Output HTML file path
-
-Optional arguments:
-  --payload    Use existing compressed payload file (skips data/structure)
-  --help       Show this help message
-```
-
-## Usage
-
-### Basic Commands
-
-```bash
-# Generate report from a directory
-qc-report --data-dir ./my-data/
-
-# Generate report with specific files  
-qc-report --data ./data.json --structure ./structure.json
-
-# Custom output location
-qc-report --data-dir ./data/ --output ./reports/experiment-1.html
-
-# Use existing compressed payload (faster for repeated builds)
+# Reuse existing payload (fastest)
+qc-report --payload ./cached-payload.bin --output ./report.html --no-auto-generate
 qc-report --payload ./cached-payload.bin --no-auto-generate
 ```
 
@@ -110,11 +99,14 @@ Your data should be in columnar format for optimal performance:
 ```json
 {
   "cell_rna_stats": {
+    "num_rows": 1000,
+    "num_cols": 5,
     "columns": [
       {
         "name": "sample_id",
         "dtype": "categorical",
-        "data": [0, 0, 1, 1, ...]
+        "data": [0, 0, 1, 1, ...],
+        "categories": ["sample_1", "sample_2"]
       },
       {
         "name": "total_counts", 
@@ -132,6 +124,18 @@ Your data should be in columnar format for optimal performance:
         "data": [298.4, 303.2, 298.6, ...]
       }
     ]
+  },
+  "sample_summary_stats": {
+    "num_rows": 2,
+    "num_cols": 3,
+    "columns": [
+      {
+        "name": "sample_id",
+        "dtype": "categorical",
+        "data": [0, 1],
+        "categories": ["sample_1", "sample_2"]
+      }
+    ]
   }
 }
 ```
@@ -142,42 +146,56 @@ Define your report layout and visualizations:
 
 ```json
 {
-  "title": "Quality Control Report",
-  "subtitle": "Single Cell RNA-seq Analysis", 
-  "defaultFilters": {},
-  "groups": [
+  "categories": [
     {
-      "title": "Cell Statistics",
-      "plots": [
+      "name": "Cell RNA QC",
+      "key": "cell_rna_stats",
+      "additionalAxes": true,
+      "defaultFilters": [
         {
-          "title": "Total RNA Counts",
-          "plotType": "histogram",
+          "type": "histogram",
           "field": "total_counts",
           "label": "total counts",
           "nBins": 50,
-          "groupBy": "sample_id"
+          "groupBy": "sample_id",
+          "cutoffMin": null,
+          "cutoffMax": null
         },
         {
-          "title": "Spatial Distribution",
-          "plotType": "spatial",
+          "type": "histogram",
+          "visualizationType": "spatial",
+          "field": "total_counts",
+          "label": "spatial expression",
           "xField": "x_coord",
-          "yField": "y_coord", 
-          "colorField": "total_counts",
-          "groupBy": "sample_id"
+          "yField": "y_coord"
         }
       ]
+    },
+    {
+      "name": "Sample Summary",
+      "key": "sample_summary_stats",
+      "additionalAxes": false,
+      "defaultFilters": []
     }
   ]
 }
 ```
 
-## Supported Plot Types
+## Supported Visualization Types
 
-- **histogram**: Distribution plots with automatic binning
-- **scatterplot**: 2D scatter plots with color mapping
-- **spatial**: Spatial coordinate plots with faceting 
-- **heatmap**: Correlation and expression heatmaps
-- **barplot**: Categorical data visualization
+- **histogram**: Distribution plots with automatic binning and filtering
+- **scatter**: 2D scatter plots with color mapping (use `yField` parameter)
+- **bar**: Bar charts for categorical data
+- **spatial**: Spatial coordinate plots with heatmap overlay (use `visualizationType: "spatial"`)
+
+## Filter Options
+
+Each visualization supports filtering options:
+
+- `cutoffMin`/`cutoffMax`: Numeric thresholds for filtering data
+- `zoomMin`/`zoomMax`: Zoom range for better visualization
+- `groupBy`: Group data by categorical variables
+- `nBins`: Number of bins for histograms
 
 ## Performance Features
 
