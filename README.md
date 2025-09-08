@@ -37,6 +37,18 @@ pnpm run build
 
 ### 1. Prepare Your Data
 
+### 1. Try with Example Data (Recommended)
+
+```bash
+# Generate test data
+qc-report generate-test-data --type sc --output ./example-data
+
+# Render the report  
+qc-report render --data ./example-data/data.json --structure ./example-data/structure.json --output ./my-report.html
+```
+
+### 2. Use Your Own Data
+
 Organize your data files:
 
 ```bash
@@ -46,10 +58,10 @@ cp experiment-data.json my-qc-data/data.json
 cp experiment-structure.json my-qc-data/structure.json
 ```
 
-### 2. Generate the Report
+Generate the report:
 
 ```bash
-qc-report --data ./my-qc-data/data.json --structure ./my-qc-data/structure.json --output ./my-qc-report.html
+qc-report render --data ./my-qc-data/data.json --structure ./my-qc-data/structure.json --output ./my-qc-report.html
 ```
 
 ### 3. View the Report
@@ -58,34 +70,40 @@ Open the generated HTML file in any modern web browser. No server required!
 
 ## CLI Usage
 
-### Command Syntax
+The QC Report Generator provides two main commands for different workflows:
+
+### Quick Start with Test Data
 
 ```bash
-qc-report --data <file> --structure <file> --output <file> [options]
+# Generate example data and create report
+qc-report generate-test-data --type sc --output ./example
+qc-report render --data ./example/data.json --structure ./example/structure.json --output ./report.html
 ```
 
-### Required Arguments
+### Commands Overview
 
-- `--data <file>`: Path to the data.json file
-- `--structure <file>`: Path to the structure.json file  
-- `--output <file>`: Output HTML file path
+**Generate Test Data:**
+```bash
+qc-report generate-test-data --type <type> --output <dir>
+```
 
-### Optional Arguments
-
-- `--payload <file>`: Use existing compressed payload file (skips compression step)
-- `--no-auto-generate`: Don't auto-generate payload if missing
-- `--help`: Show help message
+**Render Reports:**
+```bash
+qc-report render --data <file> --structure <file> --output <file> [options]
+```
 
 ### Examples
 
 ```bash
-# Basic usage
-qc-report --data ./data.json --structure ./structure.json --output ./report.html
+# Generate test datasets
+qc-report generate-test-data --type sc --output ./sc-example
+qc-report generate-test-data --type xenium --output ./spatial-example
+
+# Render reports from your data
+qc-report render --data ./data.json --structure ./structure.json --output ./report.html
 
 # Use cached payload for faster builds
-qc-report --data ./data.json --structure ./structure.json --output ./report.html --payload ./cached-payload.bin
-
-# Reuse existing payload (fastest)
+qc-report render --data ./data.json --structure ./structure.json --output ./report.html --payload ./cached-payload.bin
 qc-report --payload ./cached-payload.bin --output ./report.html --no-auto-generate
 qc-report --payload ./cached-payload.bin --no-auto-generate
 ```
@@ -227,8 +245,8 @@ git clone https://github.com/openpipelines-bio/qc_report_generator.git
 cd qc_report_generator
 pnpm install
 
-# Generate test data (requires R with required packages)
-Rscript scripts/generate_data.R
+# Generate test data
+npm run generate_data:all
 
 # Development server
 pnpm dev
@@ -238,6 +256,7 @@ pnpm build
 
 # Test CLI locally  
 node cli.js --help
+```
 
 # Test with generated data
 node cli.js --data resources_test/sc_dataset/data.json --structure resources_test/sc_dataset/structure.json --output test-report.html
@@ -256,14 +275,21 @@ See the `resources_test/` directory for example datasets and structures.
 
 ### Generating Test Data
 
-Use the included R script to generate sample datasets for testing:
+Use the included Node.js scripts to generate sample datasets for testing:
 
 ```bash
-# Generates multiple test datasets in resources_test/
-Rscript scripts/generate_data.R
+# Generate all test datasets at once
+npm run generate_data:all
+
+# Generate a specific dataset type
+npm run generate_data sc resources_test/sc_dataset
+npm run generate_data xenium resources_test/xenium_dataset
+
+# See all available options
+npm run generate_data -- --help
 ```
 
-This creates example data for:
+The scripts create example data for:
 - `sc_dataset/` - Small single-cell dataset (~20 cells)
 - `sc_dataset_large/` - Large single-cell dataset (~1.2M cells)  
 - `xenium_dataset/` - Small Xenium spatial dataset

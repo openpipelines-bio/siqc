@@ -19,7 +19,22 @@ qc-report --help
 
 ## Quick Start
 
-### Method 1: Simple workflow (Recommended)
+### Method 1: Generate test data and create report
+
+```bash
+# Generate example single-cell dataset
+qc-report generate-test-data --type sc --output ./example-data
+
+# Render the report
+qc-report render --data ./example-data/data.json --structure ./example-data/structure.json --output ./example-report.html
+
+# Open the report
+open example-report.html  # macOS
+# or  
+xdg-open example-report.html  # Linux
+```
+
+### Method 2: Use your own data
 
 1. **Prepare your data files:**
 ```bash
@@ -29,24 +44,17 @@ cp your-data.json my-experiment/data.json
 cp your-structure.json my-experiment/structure.json
 ```
 
-2. **Generate the report:**
+2. **Render the report:**
 ```bash
-qc-report --data ./my-experiment/data.json --structure ./my-experiment/structure.json --output ./my-experiment-report.html
+qc-report render --data ./my-experiment/data.json --structure ./my-experiment/structure.json --output ./my-experiment-report.html
 ```
 
-3. **Open the report:**
-```bash
-open my-experiment-report.html  # macOS
-# or
-xdg-open my-experiment-report.html  # Linux
-```
-
-### Method 2: Batch processing multiple experiments
+### Method 3: Batch processing multiple experiments
 
 ```bash
 # Process multiple experiments
 for experiment in exp1 exp2 exp3; do
-  qc-report \
+  qc-report render \
     --data ./experiments/$experiment/data.json \
     --structure ./experiments/$experiment/structure.json \
     --output ./reports/$experiment-report.html
@@ -55,35 +63,64 @@ done
 
 ## CLI Reference
 
-### Command Syntax
+### Commands Overview
 
 ```bash
-qc-report --data <file> --structure <file> --output <file> [options]
+qc-report <command> [options]
+
+Commands:
+  generate-test-data    Generate example datasets for testing
+  render               Render QC report from existing data
 ```
 
-### Required Arguments
+### Generate Test Data Command
 
+Create example datasets for testing and development.
+
+```bash
+qc-report generate-test-data --type <type> --output <dir>
+```
+
+**Required Arguments:**
+- `--type <type>`: Dataset type (sc, sc_large, xenium, xenium_large)
+- `--output <dir>`: Output directory for generated files
+
+**Examples:**
+```bash
+# Generate small single-cell dataset
+qc-report generate-test-data --type sc --output ./sc-example
+
+# Generate large spatial dataset
+qc-report generate-test-data --type xenium_large --output ./spatial-large
+```
+
+### Render Command
+
+Create QC reports from your existing data files.
+
+```bash
+qc-report render --data <file> --structure <file> --output <file> [options]
+```
+
+**Required Arguments:**
 - `--data <file>`: Path to your data.json file
 - `--structure <file>`: Path to your structure.json file  
 - `--output <file>`: Output HTML file path
 
-### Optional Arguments
-
+**Optional Arguments:**
 - `--payload <file>`: Use existing compressed payload file (skips compression)
 - `--no-auto-generate`: Don't auto-generate payload if missing
-- `--help`: Show help message
 
-### Examples
-
+**Examples:**
 ```bash
 # Basic usage
-qc-report --data ./data.json --structure ./structure.json --output ./report.html
+qc-report render --data ./data.json --structure ./structure.json --output ./report.html
 
 # Use cached payload for faster builds
-qc-report --data ./data.json --structure ./structure.json --output ./report.html --payload ./cached.bin
+qc-report render --data ./data.json --structure ./structure.json --output ./report.html --payload ./cached.bin
 
 # Reuse existing payload only (fastest)
-qc-report --payload ./cached.bin --output ./report.html --no-auto-generate
+qc-report render --payload ./cached.bin --output ./report.html --no-auto-generate
 ```
 
 ## Advanced Usage
@@ -94,10 +131,10 @@ For large datasets, you can cache the compressed payload to speed up repeated bu
 
 ```bash
 # First build - generates and caches payload
-qc-report --data ./large-dataset/data.json --structure ./large-dataset/structure.json --output ./report1.html --payload ./cache/large-payload.bin
+qc-report render --data ./large-dataset/data.json --structure ./large-dataset/structure.json --output ./report1.html --payload ./cache/large-payload.bin
 
 # Subsequent builds with same data - reuses cached payload (much faster)
-qc-report --payload ./cache/large-payload.bin --output ./report2.html --no-auto-generate
+qc-report render --payload ./cache/large-payload.bin --output ./report2.html --no-auto-generate
 ```
 
 ### Development/Local Installation
@@ -113,8 +150,9 @@ pnpm install
 # Test the CLI locally
 node cli.js --help
 
-# Use local version with test data
-node cli.js --data ./resources_test/sc_dataset_small/data.json --structure ./resources_test/sc_dataset_small/structure.json --output ./test-report.html
+# Generate test data and render report
+node cli.js generate-test-data --type sc --output ./test-data
+node cli.js render --data ./test-data/data.json --structure ./test-data/structure.json --output ./test-report.html
 ```
 
 ## File Requirements

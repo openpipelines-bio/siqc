@@ -24,7 +24,8 @@
     "build": "vite build",
     "serve": "vite preview",
     "compress_data": "node scripts/compress_data.js",
-    "generate_data": "Rscript scripts/generate_data.R",
+    "generate_data": "node scripts/generate_data.js",
+    "generate_data:all": "node scripts/generate_all_data.js",
     "prettier": "prettier -w \"src/**/*.{js,ts,json,css,tsx,jsx}\" \"*.{js,ts,mjs}\"",
     "clean": "rm -rf dist .cache .temp node_modules src/data",
     "prepublishOnly": "npm run build"
