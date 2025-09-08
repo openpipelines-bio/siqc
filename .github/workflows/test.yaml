@@ -53,15 +53,17 @@ jobs:
         run: pnpm install
 
       - name: Prepare output directory
-        run: mkdir output
+        run: mkdir -p output
 
-      - name: Build ${{ matrix.dataset.name }} report
+      - name: Generate test data for ${{ matrix.dataset.name }}
+        run: pnpm run generate_data ${{ matrix.dataset.type }} ${{ matrix.dataset.path }}
+
+      - name: Build ${{ matrix.dataset.name }} report using CLI
         run: |
-          pnpm run generate_data ${{ matrix.dataset.type }} ${{ matrix.dataset.path }}
-          pnpm run compress_data ${{ matrix.dataset.path }}/structure.json src/data/report_structure.ts
-          pnpm run compress_data ${{ matrix.dataset.path }}/data.json src/data/dataset.ts
-          pnpm run build
-          mv dist/index.html output/${{ matrix.dataset.output }}
+          npx qc-report \
+            --data ${{ matrix.dataset.path }}/data.json \
+            --structure ${{ matrix.dataset.path }}/structure.json \
+            --output output/${{ matrix.dataset.output }}
 
       - name: Upload ${{ matrix.dataset.name }} report
         uses: actions/upload-artifact@v4
