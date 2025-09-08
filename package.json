@@ -1,18 +1,57 @@
 {
-  "name": "incubator_ingestion_qc",
-  "version": "0.0.0",
-  "description": "",
+  "name": "qc-report-generator",
+  "version": "0.1.0",
+  "description": "Generate interactive QC reports from scientific data with progressive loading and spatial visualization",
   "type": "module",
+  "bin": {
+    "qc-report": "./cli.js"
+  },
+  "files": [
+    "cli.js", 
+    "plugins/**/*",
+    "src/**/*",
+    "index.html",
+    "vite.config.ts",
+    "tsconfig.json",
+    "tailwind.config.ts",
+    "postcss.config.js",
+    "ui.config.json",
+    "USAGE.md"
+  ],
   "scripts": {
     "start": "vite",
     "dev": "vite",
     "build": "vite build",
     "serve": "vite preview",
     "compress_data": "node scripts/compress_data.js",
-    "test-format": "node scripts/test_format.js",
     "generate_data": "Rscript scripts/generate_data.R",
     "prettier": "prettier -w \"src/**/*.{js,ts,json,css,tsx,jsx}\" \"*.{js,ts,mjs}\"",
-    "clean": "rm -rf dist .cache .temp node_modules src/data"
+    "clean": "rm -rf dist .cache .temp node_modules src/data",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "qc",
+    "quality-control",
+    "bioinformatics",
+    "data-visualization",
+    "spatial-analysis",
+    "progressive-loading",
+    "interactive-reports",
+    "single-cell",
+    "genomics",
+    "cli"
+  ],
+  "author": "OpenPipelines Bio",
+  "homepage": "https://github.com/openpipelines-bio/qc_report_generator",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/openpipelines-bio/qc_report_generator.git"
+  },
+  "bugs": {
+    "url": "https://github.com/openpipelines-bio/qc_report_generator/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   },
   "license": "MIT",
   "devDependencies": {
@@ -21,6 +60,7 @@
     "@types/pako": "^2.0.3",
     "@types/plotly.js-dist-min": "^2.3.4",
     "autoprefixer": "^10.4.20",
+    "dotenv": "^17.2.2",
     "pako": "^2.1.0",
     "postcss": "^8.5.1",
     "prettier": "^3.4.2",

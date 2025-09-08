@@ -1,171 +1,252 @@
-# incubator-ingestion-qc
+# QC Report Generator
 
-This is a project to visualize the ingestion qc data. Currently, 2 types of data are supported:
+[![npm version](https://badge.fury.io/js/qc-report-generator.svg)](https://badge.fury.io/js/qc-report-generator)
 
-- Single-cell (CellRanger ingestion)
-- Xenium (spatial transcriptomics)
+Generate interactive QC reports from scientific data with progressive loading and spatial visualization. Perfect for single-cell genomics, spatial transcriptomics, and other large-scale biological datasets.
 
-## Live Demo Reports
+## Features
 
-The CI automatically builds example reports for different dataset sizes in parallel:
+- 🚀 **Progressive Loading**: Large datasets (millions of cells) load incrementally without blocking the UI
+- 📊 **Interactive Visualizations**: Histograms, scatter plots, heatmaps, and spatial plots with Plotly.js
+- 🗜️ **Efficient Compression**: Binary data format with gzip compression for optimal file sizes
+- � **Standalone Reports**: Single HTML file with no external dependencies
+- 🎯 **Spatial Analysis**: Advanced spatial plotting with faceting and optimization
+- ⚡ **Performance Optimized**: Web Workers, typed arrays, and multi-scale rendering
+- 🛠️ **Easy CLI**: Simple command-line interface for quick report generation
 
-| Dataset Type | Size | Description | CI Artifact Name |
-|--------------|------|-------------|------------------|
-| Single-cell (small) | ~20 cells, 4KB | Basic single-cell QC | `single-cell-report` |
-| Single-cell (large) | ~1.2M cells, 68MB | Large-scale single-cell QC | `single-cell-large-report` |
-| Xenium (small) | Small spatial dataset | Basic spatial QC | `spatial-report` |
-| Xenium (large) | ~1.2M cells, 100MB | Large-scale spatial QC | `spatial-large-report` |
+## Installation
 
-**📥 How to access reports:**
-1. Go to the [Actions tab](https://github.com/openpipelines-bio/qc_report_generator/actions)
-2. Click on the latest successful workflow run
-3. Scroll down to "Artifacts" section
-4. Download any of the report artifacts above
-5. Extract and open the `.html` file in your browser
+Install globally to use the `qc-report` command anywhere:
 
-*All reports are self-contained HTML files with embedded data - no server required!*
+```bash
+npm install -g qc-report-generator
+# or
+pnpm install -g qc-report-generator
+# or  
+yarn global add qc-report-generator
+```
+
+Or install locally in your project:
+
+```bash
+npm install qc-report-generator
+npx qc-report --help
+```
+
+## Quick Start
+
+### 1. Prepare Your Data
+
+Create a directory with your data files:
+
+```bash
+mkdir my-qc-data/
+# Copy your data files
+cp experiment-data.json my-qc-data/data.json
+cp experiment-structure.json my-qc-data/structure.json
+```
+
+### 2. Generate the Report
+
+```bash
+qc-report --data ./my-qc-data/data.json --structure ./my-qc-data/structure.json --output ./my-qc-report.html
+```
+
+### 3. View the Report
+
+Open the generated HTML file in any modern web browser. No server required!
 
 ## Usage
 
-Install dependencies:
+### Basic Commands
 
 ```bash
-pnpm install
+# Generate report (all arguments required)
+qc-report --data ./data.json --structure ./structure.json --output ./report.html
+
+# Use existing compressed payload (faster for repeated builds)
+qc-report --payload ./cached-payload.bin --output ./report.html
 ```
 
-Generate test data:
-```bash
-# Small datasets (~4KB)
-Rscript scripts/generate_data.R sc resources_test/sc_dataset
-Rscript scripts/generate_data.R xenium resources_test/xenium_dataset
-
-# Large datasets (~45-68MB, 1.2M cells) 
-Rscript scripts/generate_data.R sc_large resources_test/sc_dataset_large
-Rscript scripts/generate_data.R xenium_large resources_test/xenium_dataset_large
-```
-
-### Generate Single-Cell Report
-
-Compress single-cell input data:
+### Advanced Options
 
 ```bash
-# For small dataset
-pnpm run compress_data resources_test/sc_dataset/structure.json src/data/report_structure.ts
-pnpm run compress_data resources_test/sc_dataset/data.json src/data/dataset.ts
+qc-report [options]
 
-# For large dataset
-pnpm run compress_data resources_test/sc_dataset_large/structure.json src/data/report_structure.ts
-pnpm run compress_data resources_test/sc_dataset_large/data.json src/data/dataset.ts
+Required arguments:
+  --data       Path to data JSON file
+  --structure  Path to structure JSON file  
+  --output     Output HTML file path
+
+Optional arguments:
+  --payload    Use existing compressed payload file (skips data/structure)
+  --help       Show this help message
 ```
 
-Generate single-cell report:
-```bash
-pnpm run build
-```
+## Usage
 
-The report should now have been built at `dist/index.html`
-
-### Generate Xenium Report
-
-Compress Xenium input data:
+### Basic Commands
 
 ```bash
-# For small spatial dataset
-pnpm run compress_data resources_test/xenium_dataset/structure.json src/data/report_structure.ts
-pnpm run compress_data resources_test/xenium_dataset/data.json src/data/dataset.ts
+# Generate report from a directory
+qc-report --data-dir ./my-data/
 
-# For large spatial dataset (1.2M cells)
-pnpm run compress_data resources_test/xenium_dataset_large/structure.json src/data/report_structure.ts
-pnpm run compress_data resources_test/xenium_dataset_large/data.json src/data/dataset.ts
+# Generate report with specific files  
+qc-report --data ./data.json --structure ./structure.json
+
+# Custom output location
+qc-report --data-dir ./data/ --output ./reports/experiment-1.html
+
+# Use existing compressed payload (faster for repeated builds)
+qc-report --payload ./cached-payload.bin --no-auto-generate
 ```
 
-Generate Xenium report:
-```bash
-pnpm run build
+## Data Format
+
+### data.json
+
+Your data should be in columnar format for optimal performance:
+
+```json
+{
+  "cell_rna_stats": {
+    "columns": [
+      {
+        "name": "sample_id",
+        "dtype": "categorical",
+        "data": [0, 0, 1, 1, ...]
+      },
+      {
+        "name": "total_counts", 
+        "dtype": "integer",
+        "data": [459, 643, 713, ...]
+      },
+      {
+        "name": "x_coord",
+        "dtype": "numeric",
+        "data": [397.5, 408.7, 426.1, ...]
+      },
+      {
+        "name": "y_coord", 
+        "dtype": "numeric",
+        "data": [298.4, 303.2, 298.6, ...]
+      }
+    ]
+  }
+}
 ```
 
-The report should now have been built at `dist/index.html`
+### structure.json
 
-## Available Scripts
+Define your report layout and visualizations:
 
-In the project directory, you can run:
-
-### `pnpm install`
-
-Run this command to install the dependencies of the project.
-
-### `pnpm run compress_data`
-
-Enhanced data compression script that supports both legacy and new formats:
-
-**Legacy TypeScript modules (backward compatibility):**
-```bash
-pnpm run compress_data data.json src/data/dataset.ts
+```json
+{
+  "title": "Quality Control Report",
+  "subtitle": "Single Cell RNA-seq Analysis", 
+  "defaultFilters": {},
+  "groups": [
+    {
+      "title": "Cell Statistics",
+      "plots": [
+        {
+          "title": "Total RNA Counts",
+          "plotType": "histogram",
+          "field": "total_counts",
+          "label": "total counts",
+          "nBins": 50,
+          "groupBy": "sample_id"
+        },
+        {
+          "title": "Spatial Distribution",
+          "plotType": "spatial",
+          "xField": "x_coord",
+          "yField": "y_coord", 
+          "colorField": "total_counts",
+          "groupBy": "sample_id"
+        }
+      ]
+    }
+  ]
+}
 ```
 
-**New columnar binary format (for progressive loading):**
-```bash
-pnpm run compress_data data.json payload.txt structure.json
-```
+## Supported Plot Types
 
-The script automatically detects the output format based on file extensions and arguments.
-
-### `pnpm run test-format`
-
-Tests the new columnar binary format and compares compression ratios:
-```bash
-pnpm run test-format [payload.txt] [data.json] [structure.json]
-```
-
-### `pnpm run dev`
-
-Runs the app in the development mode.<br>
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
-
-The page will reload if you make edits.<br>
-
-### `pnpm run build`
-
-Builds the app for production to the `dist` folder.<br>
-It correctly bundles the application in production mode and optimizes the build for the best performance.
+- **histogram**: Distribution plots with automatic binning
+- **scatterplot**: 2D scatter plots with color mapping
+- **spatial**: Spatial coordinate plots with faceting 
+- **heatmap**: Correlation and expression heatmaps
+- **barplot**: Categorical data visualization
 
 ## Performance Features
 
-This QC report generator is optimized for large datasets with several performance features:
+- **Progressive Loading**: UI renders immediately, data loads in background
+- **Web Workers**: Data decompression happens off the main thread  
+- **Typed Arrays**: Memory-efficient data storage (Float32Array, Int32Array)
+- **Multi-scale Rendering**: Automatic optimization for large spatial datasets
+- **Compression**: Typical compression ratios of 5-10x with gzip
 
-### 🚀 Progressive Loading
-- **Progressive data hydration**: Charts load incrementally as they come into view
-- **Web Worker decompression**: Data decompression happens in background workers
-- **Columnar data format**: Efficient storage and loading of specific data columns
-- **Intelligent caching**: Previously loaded data is cached for instant re-rendering
+## Live Demo Reports
 
-### 📊 Performance Monitoring
-- **Real-time performance dashboard**: Monitor loading times and memory usage
-- **First paint tracking**: Measure time to initial UI render
-- **Chart-level metrics**: Individual timing for each visualization component
-- **Memory footprint tracking**: Monitor memory usage patterns
+The CI automatically builds example reports for different dataset sizes:
 
-### 📈 Parallel Processing
-- **Parallel data loading**: Multiple data columns load simultaneously
-- **Background preloading**: Common data preloads while UI renders
-- **Non-blocking operations**: UI remains responsive during data processing
+| Dataset Type | Size | Description | Report |
+|--------------|------|-------------|--------|
+| Single-cell (small) | ~20 cells, 4KB | Basic single-cell QC | [Download](https://github.com/openpipelines-bio/qc_report_generator/actions) |
+| Single-cell (large) | ~1.2M cells, 68MB | Large-scale single-cell QC | [Download](https://github.com/openpipelines-bio/qc_report_generator/actions) |
+| Xenium (small) | Small spatial dataset | Basic spatial QC | [Download](https://github.com/openpipelines-bio/qc_report_generator/actions) |
+| Xenium (large) | ~1.2M cells, 100MB | Large-scale spatial QC | [Download](https://github.com/openpipelines-bio/qc_report_generator/actions) |
 
-These optimizations enable smooth interaction with datasets containing 1M+ cells while maintaining sub-second initial render times.
+Access reports from the [GitHub Actions artifacts](https://github.com/openpipelines-bio/qc_report_generator/actions).
 
-Builds the app for production to the `dist` folder.<br>
-It correctly bundles Solid in production mode and optimizes the build for the best performance.
+## Development
 
-The build is minified and the filenames include the hashes.<br>
-Your app is ready to be deployed!
+Clone and install for development:
 
-### `pnpm run prettier`
+```bash
+git clone https://github.com/openpipelines-bio/qc_report_generator.git
+cd qc_report_generator
+pnpm install
 
-Runs prettier on the project.
+# Development server
+pnpm dev
 
-## Documentation
+# Build package
+pnpm build
 
-* State management: [Solid Core](https://docs.solidjs.com/)
+# Test CLI locally  
+node cli.js --help
+```
 
-* Styling: [Tailwind CSS](https://tailwindcss.com/docs)
+### Architecture
 
-* Component library: [Solid UI](https://www.solid-ui.com/docs/components/accordion)
+- **SolidJS + Vite**: Fast, reactive frontend with optimized bundling
+- **Progressive Loading**: Data decompression in Web Workers using Compression Streams API
+- **Columnar Data**: Typed arrays (Float32Array, Int32Array) for memory efficiency
+- **Single File Output**: Everything embedded in one HTML file for easy distribution
+
+## Examples
+
+See the `resources_test/` directory for example datasets and structures.
+
+## Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+## License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## Citation
+
+If you use this tool in your research, please cite:
+
+```bibtex
+@software{qc_report_generator,
+  title = {QC Report Generator: Interactive Quality Control Reports for Scientific Data},
+  author = {OpenPipelines Bio},
+  url = {https://github.com/openpipelines-bio/qc_report_generator},
+  year = {2025}
+}
+```
