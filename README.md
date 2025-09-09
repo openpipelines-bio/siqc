@@ -14,98 +14,113 @@ Generate interactive QC reports from scientific data with progressive loading an
 
 ## Installation
 
-Install globally from the git repository:
+### From Git Repository (Recommended)
 
 ```bash
-# Install from git repository
+# Install globally from git repository
 npm install -g git+https://github.com/openpipelines-bio/qc_report_generator.git
 # or
 pnpm install -g git+https://github.com/openpipelines-bio/qc_report_generator.git
 ```
 
-Or clone and install locally for development:
+### Local Development
 
 ```bash
 git clone https://github.com/openpipelines-bio/qc_report_generator.git
 cd qc_report_generator
 pnpm install
-pnpm run build
-# CLI is now available as: node cli.js
+# In the following sections, CLI is now available via `pnpm cli`, not `qc-report`
 ```
 
 ## Quick Start
 
-### 1. Prepare Your Data
-
-### 1. Try with Example Data (Recommended)
+### 1. Generate Example Data
 
 ```bash
-# Generate test data
+# Generate single-cell test data
 qc-report generate-test-data --type sc --output ./example-data
 
-# Render the report  
-qc-report render --data ./example-data/data.json --structure ./example-data/structure.json --output ./my-report.html
+# Generate spatial test data  
+qc-report generate-test-data --type xenium --output ./spatial-data
 ```
 
-### 2. Use Your Own Data
-
-Organize your data files:
+### 2. Create Your First Report
 
 ```bash
-mkdir my-qc-data/
-# Copy your data files
-cp experiment-data.json my-qc-data/data.json
-cp experiment-structure.json my-qc-data/structure.json
+# Render report from test data
+qc-report render --data ./example-data/data.json --structure ./example-data/structure.json --output ./my-report.html
+
+# Open the report in your browser
+open my-report.html
 ```
 
-Generate the report:
+### 3. Use Your Own Data
+
+Prepare your data in the required format (see [Data Format](#data-format)) and render:
 
 ```bash
 qc-report render --data ./my-qc-data/data.json --structure ./my-qc-data/structure.json --output ./my-qc-report.html
 ```
 
-### 3. View the Report
+## CLI Reference
 
-Open the generated HTML file in any modern web browser. No server required!
+### Commands
 
-## CLI Usage
-
-The QC Report Generator provides two main commands for different workflows:
-
-### Quick Start with Test Data
+#### `generate-test-data`
+Generate example datasets for testing and development.
 
 ```bash
-# Generate example data and create report
-qc-report generate-test-data --type sc --output ./example
-qc-report render --data ./example/data.json --structure ./example/structure.json --output ./report.html
+qc-report generate-test-data --type <type> --output <directory>
 ```
 
-### Commands Overview
+**Options:**
+- `--type, -t`: Dataset type (`sc`, `sc_large`, `xenium`, `xenium_large`)
+- `--output, -o`: Output directory for generated files
+- `--verbose`: Enable verbose logging
 
-**Generate Test Data:**
+**Examples:**
 ```bash
-qc-report generate-test-data --type <type> --output <dir>
+qc-report generate-test-data --type sc --output ./test-data
+qc-report generate-test-data --type xenium_large --output ./large-spatial --verbose
 ```
 
-**Render Reports:**
+#### `render`
+Generate QC report from existing data.
+
 ```bash
 qc-report render --data <file> --structure <file> --output <file> [options]
 ```
 
-### Examples
+**Options:**
+- `--data, -d`: Path to data JSON file (required)
+- `--structure, -s`: Path to structure JSON file (required)
+- `--output, -o`: Output HTML file path (required)
+- `--payload, -p`: Path to binary payload file (auto-generated if not specified)
+- `--auto-generate`: Auto-generate payload file if not specified (default: true)
+- `--verbose`: Enable verbose logging
+
+**Examples:**
+```bash
+qc-report render --data ./data.json --structure ./structure.json --output ./report.html
+qc-report render --data ./data.json --structure ./structure.json --output ./report.html --payload ./cached-payload.bin
+```
+
+#### `compress`
+Compress data to binary payload format for faster loading.
 
 ```bash
-# Generate test datasets
-qc-report generate-test-data --type sc --output ./sc-example
-qc-report generate-test-data --type xenium --output ./spatial-example
+qc-report compress --data <file> --structure <file> --output <file>
+```
 
-# Render reports from your data
-qc-report render --data ./data.json --structure ./structure.json --output ./report.html
+**Options:**
+- `--data, -d`: Path to input data JSON file (required)
+- `--structure, -s`: Path to structure JSON file (required)
+- `--output, -o`: Output binary payload file path (required)
+- `--verbose`: Enable verbose logging
 
-# Use cached payload for faster builds
-qc-report render --data ./data.json --structure ./structure.json --output ./report.html --payload ./cached-payload.bin
-qc-report --payload ./cached-payload.bin --output ./report.html --no-auto-generate
-qc-report --payload ./cached-payload.bin --no-auto-generate
+**Examples:**
+```bash
+qc-report compress --data data.json --structure structure.json --output payload.bin
 ```
 
 ## Data Format
@@ -117,41 +132,36 @@ Your data should be in columnar format for optimal performance:
 ```json
 {
   "cell_rna_stats": {
-    "num_rows": 1000,
-    "num_cols": 5,
     "columns": [
       {
         "name": "sample_id",
         "dtype": "categorical",
-        "data": [0, 0, 1, 1, ...],
-        "categories": ["sample_1", "sample_2"]
+        "data": [0, 0, 1, 1, 2],
+        "categories": ["sample_A", "sample_B", "sample_C"]
       },
       {
-        "name": "total_counts", 
+        "name": "total_counts",
         "dtype": "integer",
-        "data": [459, 643, 713, ...]
+        "data": [1200, 1500, 800, 2000, 1100]
       },
+      {
+        "name": "fraction_mitochondrial",
+        "dtype": "numeric", 
+        "data": [0.05, 0.08, 0.12, 0.03, 0.07]
+      }
+    ]
+  },
+  "spatial_coords": {
+    "columns": [
       {
         "name": "x_coord",
         "dtype": "numeric",
-        "data": [397.5, 408.7, 426.1, ...]
+        "data": [100.5, 200.3, 300.1, 150.7, 250.9]
       },
       {
         "name": "y_coord", 
         "dtype": "numeric",
-        "data": [298.4, 303.2, 298.6, ...]
-      }
-    ]
-  },
-  "sample_summary_stats": {
-    "num_rows": 2,
-    "num_cols": 3,
-    "columns": [
-      {
-        "name": "sample_id",
-        "dtype": "categorical",
-        "data": [0, 1],
-        "categories": ["sample_1", "sample_2"]
+        "data": [50.2, 75.8, 90.3, 120.5, 80.1]
       }
     ]
   }
@@ -160,162 +170,31 @@ Your data should be in columnar format for optimal performance:
 
 ### structure.json
 
-Define your report layout and visualizations:
+Define the report structure and categories:
 
 ```json
 {
+  "title": "My QC Report",
   "categories": [
     {
-      "name": "Cell RNA QC",
       "key": "cell_rna_stats",
-      "additionalAxes": true,
-      "defaultFilters": [
-        {
-          "type": "histogram",
-          "field": "total_counts",
-          "label": "total counts",
-          "nBins": 50,
-          "groupBy": "sample_id",
-          "cutoffMin": null,
-          "cutoffMax": null
-        },
-        {
-          "type": "histogram",
-          "visualizationType": "spatial",
-          "field": "total_counts",
-          "label": "spatial expression",
-          "xField": "x_coord",
-          "yField": "y_coord"
-        }
-      ]
+      "name": "Cell RNA Statistics",
+      "additionalAxes": false,
+      "defaultFilters": []
     },
     {
-      "name": "Sample Summary",
-      "key": "sample_summary_stats",
-      "additionalAxes": false,
+      "key": "spatial_coords", 
+      "name": "Spatial Coordinates",
+      "additionalAxes": true,
       "defaultFilters": []
     }
   ]
 }
 ```
 
-## Supported Visualization Types
+**Data Types:**
+- `categorical`: Integer indices with category labels
+- `integer`: Whole numbers
+- `numeric`: Floating-point numbers
+- `boolean`: True/false values
 
-- **histogram**: Distribution plots with automatic binning and filtering
-- **scatter**: 2D scatter plots with color mapping (use `yField` parameter)
-- **bar**: Bar charts for categorical data
-- **spatial**: Spatial coordinate plots with heatmap overlay (use `visualizationType: "spatial"`)
-
-## Filter Options
-
-Each visualization supports filtering options:
-
-- `cutoffMin`/`cutoffMax`: Numeric thresholds for filtering data
-- `zoomMin`/`zoomMax`: Zoom range for better visualization
-- `groupBy`: Group data by categorical variables
-- `nBins`: Number of bins for histograms
-
-## Performance Features
-
-- **Progressive Loading**: UI renders immediately, data loads in background
-- **Web Workers**: Data decompression happens off the main thread  
-- **Typed Arrays**: Memory-efficient data storage (Float32Array, Int32Array)
-- **Multi-scale Rendering**: Automatic optimization for large spatial datasets
-- **Compression**: Typical compression ratios of 5-10x with gzip
-
-## Live Demo Reports
-
-The CI automatically builds example reports for different dataset sizes:
-
-| Dataset Type | Size | Description | Report |
-|--------------|------|-------------|--------|
-| Single-cell (small) | ~20 cells, 4KB | Basic single-cell QC | [Download](https://github.com/openpipelines-bio/qc_report_generator/actions) |
-| Single-cell (large) | ~1.2M cells, 68MB | Large-scale single-cell QC | [Download](https://github.com/openpipelines-bio/qc_report_generator/actions) |
-| Xenium (small) | Small spatial dataset | Basic spatial QC | [Download](https://github.com/openpipelines-bio/qc_report_generator/actions) |
-| Xenium (large) | ~1.2M cells, 100MB | Large-scale spatial QC | [Download](https://github.com/openpipelines-bio/qc_report_generator/actions) |
-
-Access reports from the [GitHub Actions artifacts](https://github.com/openpipelines-bio/qc_report_generator/actions).
-
-## Development
-
-Clone and install for development:
-
-```bash
-git clone https://github.com/openpipelines-bio/qc_report_generator.git
-cd qc_report_generator
-pnpm install
-
-# Generate test data using the CLI
-pnpm generate-test-data --type sc --output resources_test/sc_dataset
-pnpm generate-test-data --type xenium --output resources_test/xenium_dataset
-
-# Development server
-pnpm dev
-
-# Build package
-pnpm build
-
-# Test CLI locally  
-node cli.js --help
-```
-
-# Test with generated data
-pnpm render --data resources_test/sc_dataset/data.json --structure resources_test/sc_dataset/structure.json --output test-report.html
-```
-
-### Architecture
-
-- **SolidJS + Vite**: Fast, reactive frontend with optimized bundling
-- **Progressive Loading**: Data decompression in Web Workers using Compression Streams API
-- **Columnar Data**: Typed arrays (Float32Array, Int32Array) for memory efficiency
-- **Single File Output**: Everything embedded in one HTML file for easy distribution
-
-## Examples
-
-See the `resources_test/` directory for example datasets and structures.
-
-### Generating Test Data
-
-Use the unified CLI to generate sample datasets for testing:
-
-```bash
-# Generate specific dataset types
-pnpm generate-test-data --type sc --output resources_test/sc_dataset
-pnpm generate-test-data --type xenium --output resources_test/xenium_dataset
-pnpm generate-test-data --type sc_large --output resources_test/sc_dataset_large
-pnpm generate-test-data --type xenium_large --output resources_test/xenium_dataset_large
-
-# Or use the npm script aliases
-pnpm run generate-test-data --type sc --output resources_test/sc_dataset
-
-# See all available commands and options
-node cli.js --help
-pnpm generate-test-data --help
-```
-
-The scripts create example data for:
-- `sc_dataset/` - Small single-cell dataset (~20 cells)
-- `sc_dataset_large/` - Large single-cell dataset (~1.2M cells)  
-- `xenium_dataset/` - Small Xenium spatial dataset
-- `xenium_dataset_large/` - Large Xenium spatial dataset (~1.2M cells)
-
-## Contributing
-
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
-
-## License
-
-MIT License - see [LICENSE](LICENSE) file for details.
-
-## Citation
-
-If you use this tool in your research, please cite:
-
-```bibtex
-@software{qc_report_generator,
-  title = {QC Report Generator: Interactive Quality Control Reports for Scientific Data},
-  author = {OpenPipelines Bio},
-  url = {https://github.com/openpipelines-bio/qc_report_generator},
-  year = {2025}
-}
-```
