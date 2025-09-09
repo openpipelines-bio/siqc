@@ -338,9 +338,18 @@ async function renderReport(options) {
 
   // Handle payload file
   let finalPayload = payload;
+  let shouldCleanupPayload = false;
+  
   if (!finalPayload && autoGenerate) {
     const dataDir = path.dirname(data);
     finalPayload = path.join(dataDir, 'qc-report-payload.bin');
+    shouldCleanupPayload = true; // Only cleanup if we auto-generated it
+    
+    // Generate the payload file before building
+    if (!fs.existsSync(finalPayload)) {
+      if (verbose) console.log(`🗜️ Auto-generating payload: ${finalPayload}`);
+      await compressToBinary(data, finalPayload, structure);
+    }
   }
 
   if (verbose && finalPayload) {
@@ -409,8 +418,8 @@ async function renderReport(options) {
     const sizeMB = (stats.size / 1024 / 1024).toFixed(1);
     console.log(`📊 Report size: ${sizeMB} MB`);
 
-    // Clean up temporary payload if it was auto-generated
-    if (autoGenerate && finalPayload && fs.existsSync(finalPayload)) {
+    // Clean up temporary payload only if it was auto-generated
+    if (shouldCleanupPayload && finalPayload && fs.existsSync(finalPayload)) {
       const payloadDir = path.dirname(finalPayload);
       const outputFileDir = path.dirname(output);
       
