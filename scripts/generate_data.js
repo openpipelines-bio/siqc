@@ -333,13 +333,8 @@ function generateXeniumDataset({
     return {
       // Each sample represents different tissue regions or conditions
       tissueType: i % 3, // 0: cortex-like, 1: hippocampus-like, 2: tumor-like
-      cellDensity: sampleRng.uniform(0.7, 1.4), // Cells per unit area
-      spatialOrganization: sampleRng.uniform(0.3, 0.9), // How organized the tissue is
       totalCountMultiplier: sampleRng.uniform(0.8, 1.3),
       mitoGradientStrength: sampleRng.uniform(0.2, 0.8), // Spatial gradient strength
-      // Different tissue regions have different coordinates
-      xOffset: i * 500 + sampleRng.uniform(-50, 50),
-      yOffset: i * 400 + sampleRng.uniform(-50, 50),
       // Tissue-specific expression patterns
       expressionPattern: {
         highExpression: sampleRng.uniform(0.2, 0.4), // Proportion of high-expressing cells
@@ -350,51 +345,79 @@ function generateXeniumDataset({
     };
   });
 
-  // Generate realistic spatial coordinates with tissue-like patterns
+  // Generate realistic spatial coordinates using 2D normal distribution
   function generateSpatialCoordinates(sampleIdx, cellsPerSample) {
     const char = sampleCharacteristics[sampleIdx];
     const sampleRng = new Random(121 + sampleIdx * 150);
     
+    // Define comparable but randomized coordinate ranges for each sample
+    // Base ranges are in the same order of magnitude (hundreds to low thousands)
+    const baseRange = 1000; // Base coordinate range
+    const rangeVariation = 0.4; // ±40% variation
+    
+    const xRange = baseRange * sampleRng.uniform(1 - rangeVariation, 1 + rangeVariation);
+    const yRange = baseRange * sampleRng.uniform(1 - rangeVariation, 1 + rangeVariation);
+    
+    // Random offsets to separate samples spatially but keep ranges comparable
+    const xOffset = sampleIdx * baseRange * 0.8 + sampleRng.uniform(-baseRange * 0.2, baseRange * 0.2);
+    const yOffset = sampleIdx * baseRange * 0.6 + sampleRng.uniform(-baseRange * 0.2, baseRange * 0.2);
+    
+    // 2D normal distribution parameters
+    const numClusters = Math.max(1, Math.floor(sampleRng.uniform(1, 4))); // 1-3 clusters per sample
+    const clusters = [];
+    
+    for (let c = 0; c < numClusters; c++) {
+      clusters.push({
+        // Center positions within the sample's coordinate space
+        centerX: xOffset + sampleRng.uniform(0.2, 0.8) * xRange,
+        centerY: yOffset + sampleRng.uniform(0.2, 0.8) * yRange,
+        // Standard deviations for the 2D normal distribution
+        stdX: xRange * sampleRng.uniform(0.1, 0.25), // 10-25% of range
+        stdY: yRange * sampleRng.uniform(0.1, 0.25),
+        // Correlation between x and y coordinates
+        correlation: sampleRng.uniform(-0.3, 0.3),
+        // Weight of this cluster (for multiple clusters)
+        weight: sampleRng.uniform(0.3, 1.0)
+      });
+    }
+    
+    // Normalize cluster weights
+    const totalWeight = clusters.reduce((sum, cluster) => sum + cluster.weight, 0);
+    clusters.forEach(cluster => cluster.weight /= totalWeight);
+    
     const coords = [];
     
-    if (char.spatialOrganization > 0.6) {
-      // Organized tissue pattern (like cortical layers)
-      const layerWidth = 80 * Math.sqrt(cellsPerSample);
-      const layerHeight = 60 * Math.sqrt(cellsPerSample);
-      
-      for (let i = 0; i < cellsPerSample; i++) {
-        // Create layered structure with some randomness
-        const layer = Math.floor(i / (cellsPerSample / 4)); // 4 layers
-        const posInLayer = i % (cellsPerSample / 4);
-        
-        const x = char.xOffset + (posInLayer * layerWidth / (cellsPerSample / 4)) + 
-                  sampleRng.normal(0, spatialNoise * 2);
-        const y = char.yOffset + layer * (layerHeight / 4) + 
-                  sampleRng.normal(0, spatialNoise);
-        
-        coords.push({ x, y });
+    for (let i = 0; i < cellsPerSample; i++) {
+      // Select cluster based on weights
+      let selectedCluster = clusters[0];
+      if (clusters.length > 1) {
+        const rand = sampleRng.random();
+        let cumWeight = 0;
+        for (const cluster of clusters) {
+          cumWeight += cluster.weight;
+          if (rand <= cumWeight) {
+            selectedCluster = cluster;
+            break;
+          }
+        }
       }
-    } else {
-      // More random/disorganized pattern (like tumor tissue)
-      const clusterCenters = Array.from({ length: Math.max(2, Math.floor(cellsPerSample / 5)) }, () => ({
-        x: char.xOffset + sampleRng.uniform(-50, 150),
-        y: char.yOffset + sampleRng.uniform(-50, 120)
-      }));
       
-      for (let i = 0; i < cellsPerSample; i++) {
-        // Assign cell to nearest cluster with some probability
-        const centerIdx = Math.floor(sampleRng.random() * clusterCenters.length);
-        const center = clusterCenters[centerIdx];
-        
-        const clusterRadius = 30 + sampleRng.uniform(-10, 20);
-        const angle = sampleRng.uniform(0, 2 * Math.PI);
-        const distance = sampleRng.uniform(0, clusterRadius) * char.cellDensity;
-        
-        const x = center.x + distance * Math.cos(angle) + sampleRng.normal(0, spatialNoise);
-        const y = center.y + distance * Math.sin(angle) + sampleRng.normal(0, spatialNoise);
-        
-        coords.push({ x, y });
-      }
+      // Generate correlated 2D normal distribution
+      const u1 = sampleRng.random();
+      const u2 = sampleRng.random();
+      
+      // Box-Muller transform for independent normal variables
+      const z1 = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+      const z2 = Math.sqrt(-2 * Math.log(u1)) * Math.sin(2 * Math.PI * u2);
+      
+      // Apply correlation and scaling
+      const x = selectedCluster.centerX + 
+                selectedCluster.stdX * z1;
+      const y = selectedCluster.centerY + 
+                selectedCluster.stdY * (selectedCluster.correlation * z1 + 
+                Math.sqrt(1 - selectedCluster.correlation * selectedCluster.correlation) * z2);
+      
+      coords.push({ x, y });
     }
     
     return coords;
