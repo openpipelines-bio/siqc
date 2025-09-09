@@ -29,6 +29,9 @@ importers:
       lodash:
         specifier: ^4.17.21
         version: 4.17.21
+      pako:
+        specifier: ^2.1.0
+        version: 2.1.0
       plotly.js-dist-min:
         specifier: ^2.35.3
         version: 2.35.3
@@ -63,9 +66,6 @@ importers:
       dotenv:
         specifier: ^17.2.2
         version: 17.2.2
-      pako:
-        specifier: ^2.1.0
-        version: 2.1.0
       postcss:
         specifier: ^8.5.1
         version: 8.5.1
