@@ -1,6 +1,7 @@
 import {
   createEffect,
   createSignal,
+  createMemo,
   For,
   Match,
   Show,
@@ -10,7 +11,6 @@ import {
 } from "solid-js";
 import { createStore, produce } from "solid-js/store";
 import { ReportStructure, FilterSettings, RawData, Settings } from "./types";
-import * as _ from "lodash";
 import { H1, H2, H3 } from "./components/heading";
 import { getData, getReportStructure, initializeDataLoader } from "./lib/get-data";
 import { progressiveDataAdapter } from "./lib/progressive-data-adapter";
@@ -18,19 +18,15 @@ import { Histogram } from "./components/histogram";
 import { FilterSettingsForm } from "./components/app/filter-settings-form";
 import { DataSummaryTable } from "./components/app/data-summary-table";
 import { BarPlot } from "./components/barplot";
-import { ScatterPlot } from "./components/scatterplot";
-import { createMemo } from "solid-js";
 import { SampleFilterForm } from "./components/app/sample-filter-form";
 import { filterData, calculateQcPassCells, getPassingCellIndices } from "./lib/data-filters";
 import { transformSampleMetadata } from "./lib/sample-utils";
 import { createSettingsForm, SettingsFormProvider } from "./components/app/settings-form";
 import { GlobalVisualizationSettings } from "./components/app/global-visualization-settings";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./components/ui/collapsible";
-import { Heatmap } from "~/components/heatmap";
-import { SpatialHeatmap, SpatialBinData } from "./components/spatial-heatmap";
+import { SpatialHeatmap } from "./components/spatial-heatmap";
 import { ChartPlaceholder } from "./lib/progressive-loading";
 import { DynamicChart } from "./components/dynamic-chart";
-import { ProgressiveWrapper, AggregatedChart, MultiSourceChart } from "./components/progressive-chart";
 import { PerformanceDashboard } from "./components/performance-dashboard";
 
 const App: Component = () => {
@@ -171,107 +167,7 @@ const App: Component = () => {
 
   const binning = form.useStore(state => state.values.binning);
 
-  // Lazy spatial binning cache - only computed when first spatial heatmap is rendered
-  const [spatialBinCache, setSpatialBinCache] = createSignal<SpatialBinData | null>(null);
-  const [spatialDataFingerprint, setSpatialDataFingerprint] = createSignal<string>("");
-  
-  const getSpatialBinData = createMemo(() => {
-    if (!binning().enabled) return null;
-    
-    const cellData = fullyFilteredData()?.cell_rna_stats;
-    if (!cellData) return null;
-    
-    const xCoordCol = cellData.columns.find(col => col.name === "x_coord");
-    const yCoordCol = cellData.columns.find(col => col.name === "y_coord");
-    
-    if (!xCoordCol || !yCoordCol) return null;
-    
-    const xCoords = xCoordCol.data as number[];
-    const yCoords = yCoordCol.data as number[];
-    
-    // Create a fingerprint of the current data to detect changes
-    const currentFingerprint = `${xCoords.length}-${cellData.num_rows}`;
-    
-    // Return function to compute bins lazily
-    return {
-      xCoords,
-      yCoords,
-      computeBins: (numBinsX = 50, numBinsY = 50): SpatialBinData => {
-        // Check if we have cached bins for these parameters AND the same data
-        const cached = spatialBinCache();
-        const cachedFingerprint = spatialDataFingerprint();
-        
-        if (cached && 
-            cached.numBinsX === numBinsX && 
-            cached.numBinsY === numBinsY && 
-            cachedFingerprint === currentFingerprint) {
-          console.log(`✅ Using cached spatial bins (${numBinsX}×${numBinsY}, ${xCoords.length.toLocaleString()} cells)`);
-          return cached;
-        }
-        
-        // Invalidate cache if data changed
-        if (cachedFingerprint !== currentFingerprint) {
-          console.log(`🔄 Data changed - invalidating spatial cache`);
-        }
-        
-        // Compute bins for the first time or after data change
-        console.log(`🔄 Computing spatial bins for ${xCoords.length.toLocaleString()} cells (${numBinsX}×${numBinsY} grid)`);
-        
-        const xMin = _.min(xCoords)! - 1e-6;
-        const xMax = _.max(xCoords)! + 1e-6;
-        const yMin = _.min(yCoords)! - 1e-6;
-        const yMax = _.max(yCoords)! + 1e-6;
 
-        const binWidthX = (xMax - xMin) / numBinsX;
-        const binWidthY = (yMax - yMin) / numBinsY;
-
-        const xBinCenters = Array.from({ length: numBinsX }, (_, i) => 
-          xMin + (i + 0.5) * binWidthX
-        );
-        const yBinCenters = Array.from({ length: numBinsY }, (_, i) => 
-          yMin + (i + 0.5) * binWidthY
-        );
-
-        const binIndices: number[][][] = Array.from({ length: numBinsY }, () => 
-          Array.from({ length: numBinsX }, () => [])
-        );
-
-        // Assign each cell to its bin
-        for (let i = 0; i < xCoords.length; i++) {
-          const px = xCoords[i];
-          const py = yCoords[i];
-
-          const xBin = Math.floor((px - xMin) / binWidthX);
-          const yBin = Math.floor((py - yMin) / binWidthY);
-          
-          if (xBin >= 0 && xBin < numBinsX && yBin >= 0 && yBin < numBinsY) {
-            binIndices[yBin][xBin].push(i);
-          }
-        }
-
-        const binData: SpatialBinData = {
-          xMin,
-          xMax,
-          yMin,
-          yMax,
-          numBinsX,
-          numBinsY,
-          binWidthX,
-          binWidthY,
-          xBinCenters,
-          yBinCenters,
-          binIndices
-        };
-
-        // Cache the computed bins and update fingerprint
-        setSpatialBinCache(binData);
-        setSpatialDataFingerprint(currentFingerprint);
-        console.log(`✅ Spatial bins cached (${binData.binIndices.flat().reduce((sum, bin) => sum + bin.length, 0)} cells binned)`);
-        
-        return binData;
-      }
-    };
-  });
 
   // initialise filtersettings
   const [settings, setSettings] = createStore<Settings>(
@@ -587,7 +483,7 @@ const App: Component = () => {
                                     dataProvider={() => (filters().enabled ? fullyFilteredData() : filteredData())?.[category.key]}
                                   >
                                     {(chartData, metadata) => {
-                                      // Extract coordinate data for optimization
+                                      // Extract coordinate data
                                       const xCoordCol = chartData.columns?.find((col: any) => col.name === "x_coord");
                                       const yCoordCol = chartData.columns?.find((col: any) => col.name === "y_coord");
                                       const valueCol = chartData.columns?.find((col: any) => col.name === setting.field);
@@ -596,47 +492,12 @@ const App: Component = () => {
                                         : null;
                                       
                                       if (xCoordCol && yCoordCol && valueCol) {
-                                        // Get precomputed spatial bins if available
-                                        const spatialData = getSpatialBinData();
                                         const binning = form.useStore(state => state.values.binning);
-                                        
-                                        // Calculate square bins based on data aspect ratio
-                                        const xCoords = xCoordCol.data as number[];
-                                        const yCoords = yCoordCol.data as number[];
-                                        
-                                        // Use manual min/max calculation to avoid "too many arguments" error with large arrays
-                                        let xMin = xCoords[0], xMax = xCoords[0];
-                                        let yMin = yCoords[0], yMax = yCoords[0];
-                                        
-                                        for (let i = 1; i < xCoords.length; i++) {
-                                          if (xCoords[i] < xMin) xMin = xCoords[i];
-                                          if (xCoords[i] > xMax) xMax = xCoords[i];
-                                          if (yCoords[i] < yMin) yMin = yCoords[i];
-                                          if (yCoords[i] > yMax) yMax = yCoords[i];
-                                        }
-                                        
-                                        const xRange = xMax - xMin;
-                                        const yRange = yMax - yMin;
-                                        const aspectRatio = xRange / yRange;
-                                        
-                                        // Adjust bins to maintain square aspect ratio
-                                        let numBinsX = binning().numBinsX;
-                                        let numBinsY = binning().numBinsY;
-                                        
-                                        if (aspectRatio > 1) {
-                                          // Wider than tall, adjust Y bins
-                                          numBinsY = Math.round(numBinsX / aspectRatio);
-                                        } else {
-                                          // Taller than wide, adjust X bins  
-                                          numBinsX = Math.round(numBinsY * aspectRatio);
-                                        }
-                                        
-                                        const precomputedBins = spatialData?.computeBins(numBinsX, numBinsY);
                                         
                                         return (
                                           <SpatialHeatmap
-                                            xCoords={xCoords}
-                                            yCoords={yCoords}
+                                            xCoords={xCoordCol.data as number[]}
+                                            yCoords={yCoordCol.data as number[]}
                                             values={valueCol.data as number[]}
                                             groupIds={groupCol ? groupCol.data as number[] : null}
                                             groupLabels={groupCol?.categories || null}
@@ -644,9 +505,8 @@ const App: Component = () => {
                                             colorField={setting.label || setting.field}
                                             faceted={!!groupCol}
                                             height="600px"
-                                            numBinsX={numBinsX}
-                                            numBinsY={numBinsY}
-                                            precomputedBins={precomputedBins}
+                                            numBinsX={binning().numBinsX}
+                                            numBinsY={binning().numBinsY}
                                           />
                                         );
                                       }
