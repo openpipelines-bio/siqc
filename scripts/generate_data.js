@@ -15,6 +15,8 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+
+
 // Utility functions for random number generation
 class Random {
   constructor(seed = 42) {
@@ -70,6 +72,11 @@ class Random {
 }
 
 // Data transformation utilities
+function getSampleStat(data, sampleId, func, sampleIdArray) {
+  const sampleData = data.filter((_, i) => sampleIdArray[i] === sampleId);
+  return func(sampleData);
+}
+
 function transformDataFrame(data, metadata = {}) {
   const columns = Object.keys(data).map(name => {
     const values = data[name];
@@ -85,10 +92,23 @@ function transformDataFrame(data, metadata = {}) {
       dtype = 'boolean';
     } else if (typeof firstValue === 'string') {
       dtype = 'categorical';
-      // Convert to categorical indices
-      const uniqueValues = [...new Set(values.filter(v => v !== null))];
+      // Optimized categorical conversion using Map for O(1) lookups
+      const uniqueMap = new Map();
+      const uniqueValues = [];
+      let nextIndex = 0;
+      
+      // Single pass to build unique values and mapping
+      for (const value of values) {
+        if (value !== null && !uniqueMap.has(value)) {
+          uniqueMap.set(value, nextIndex);
+          uniqueValues.push(value);
+          nextIndex++;
+        }
+      }
+      
       categories = uniqueValues;
-      processedData = values.map(v => v === null ? null : uniqueValues.indexOf(v));
+      // Fast conversion using Map lookup (O(1) per value)
+      processedData = values.map(v => v === null ? null : uniqueMap.get(v));
     } else if (Number.isInteger(firstValue)) {
       dtype = 'integer';
     } else if (typeof firstValue === 'number') {
@@ -250,32 +270,27 @@ function generateScDataset({
   });
 
   // Generate sample summary stats
-  const getSampleStat = (data, sampleId, func) => {
-    const sampleData = data.filter((_, i) => cellRnaStats.sample_id[i] === sampleId);
-    return func(sampleData);
-  };
-
   const sampleSummaryStats = {
     sample_id: sampleIds,
     rna_num_barcodes: Array.from({ length: numSamples }, () => Math.round(cellsPerSample * 1.5)),
     rna_num_barcodes_filtered: Array.from({ length: numSamples }, () => cellsPerSample),
     rna_sum_total_counts: sampleIds.map(id => 
-      getSampleStat(cellRnaStats.total_counts, id, arr => arr.reduce((a, b) => a + b, 0))
+      getSampleStat(cellRnaStats.total_counts, id, arr => arr.reduce((a, b) => a + b, 0), cellRnaStats.sample_id)
     ),
     rna_median_total_counts: sampleIds.map(id =>
       getSampleStat(cellRnaStats.total_counts, id, arr => {
         const sorted = [...arr].sort((a, b) => a - b);
         return sorted[Math.floor(sorted.length / 2)];
-      })
+      }, cellRnaStats.sample_id)
     ),
     rna_overall_num_nonzero_vars: sampleIds.map(id =>
-      getSampleStat(cellRnaStats.num_nonzero_vars, id, arr => Math.max(...arr) * 1.2)
+      getSampleStat(cellRnaStats.num_nonzero_vars, id, arr => Math.max(...arr) * 1.2, cellRnaStats.sample_id)
     ),
     rna_median_num_nonzero_vars: sampleIds.map(id =>
       getSampleStat(cellRnaStats.num_nonzero_vars, id, arr => {
         const sorted = [...arr].sort((a, b) => a - b);
         return sorted[Math.floor(sorted.length / 2)];
-      })
+      }, cellRnaStats.sample_id)
     )
   };
 
@@ -367,6 +382,7 @@ function generateXeniumDataset({
     const clusters = [];
     
     for (let c = 0; c < numClusters; c++) {
+      const correlation = sampleRng.uniform(-0.3, 0.3);
       clusters.push({
         // Center positions within the sample's coordinate space
         centerX: xOffset + sampleRng.uniform(0.2, 0.8) * xRange,
@@ -374,48 +390,72 @@ function generateXeniumDataset({
         // Standard deviations for the 2D normal distribution
         stdX: xRange * sampleRng.uniform(0.1, 0.25), // 10-25% of range
         stdY: yRange * sampleRng.uniform(0.1, 0.25),
-        // Correlation between x and y coordinates
-        correlation: sampleRng.uniform(-0.3, 0.3),
+        // Pre-compute correlation terms for performance
+        correlation: correlation,
+        corrSqrt: Math.sqrt(1 - correlation * correlation), // Pre-compute expensive sqrt
         // Weight of this cluster (for multiple clusters)
         weight: sampleRng.uniform(0.3, 1.0)
       });
     }
     
-    // Normalize cluster weights
+    // Normalize cluster weights and pre-compute cumulative weights
     const totalWeight = clusters.reduce((sum, cluster) => sum + cluster.weight, 0);
-    clusters.forEach(cluster => cluster.weight /= totalWeight);
+    let cumWeight = 0;
+    clusters.forEach(cluster => {
+      cluster.weight /= totalWeight;
+      cumWeight += cluster.weight;
+      cluster.cumWeight = cumWeight;
+    });
     
     const coords = [];
     
+    // Pre-allocate normal variates in batches for better performance
+    const batchSize = Math.min(cellsPerSample, 10000);
+    let normalBatch = [];
+    let batchIndex = 0;
+    
+    // Function to generate batch of normal variates
+    const generateNormalBatch = () => {
+      normalBatch = [];
+      for (let i = 0; i < batchSize * 2; i += 2) {
+        const u1 = sampleRng.random();
+        const u2 = sampleRng.random();
+        
+        // Box-Muller transform - generate two normal variates at once
+        const sqrt2log = Math.sqrt(-2 * Math.log(u1));
+        const twoPiU2 = 2 * Math.PI * u2;
+        normalBatch[i] = sqrt2log * Math.cos(twoPiU2);
+        normalBatch[i + 1] = sqrt2log * Math.sin(twoPiU2);
+      }
+      batchIndex = 0;
+    };
+    
     for (let i = 0; i < cellsPerSample; i++) {
-      // Select cluster based on weights
+      // Refill batch if needed
+      if (batchIndex >= normalBatch.length) {
+        generateNormalBatch();
+      }
+      
+      // Fast cluster selection using pre-computed cumulative weights
       let selectedCluster = clusters[0];
       if (clusters.length > 1) {
         const rand = sampleRng.random();
-        let cumWeight = 0;
         for (const cluster of clusters) {
-          cumWeight += cluster.weight;
-          if (rand <= cumWeight) {
+          if (rand <= cluster.cumWeight) {
             selectedCluster = cluster;
             break;
           }
         }
       }
       
-      // Generate correlated 2D normal distribution
-      const u1 = sampleRng.random();
-      const u2 = sampleRng.random();
+      // Get normal variates from batch
+      const z1 = normalBatch[batchIndex++];
+      const z2 = normalBatch[batchIndex++];
       
-      // Box-Muller transform for independent normal variables
-      const z1 = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-      const z2 = Math.sqrt(-2 * Math.log(u1)) * Math.sin(2 * Math.PI * u2);
-      
-      // Apply correlation and scaling
-      const x = selectedCluster.centerX + 
-                selectedCluster.stdX * z1;
+      // Apply correlation and scaling using pre-computed values
+      const x = selectedCluster.centerX + selectedCluster.stdX * z1;
       const y = selectedCluster.centerY + 
-                selectedCluster.stdY * (selectedCluster.correlation * z1 + 
-                Math.sqrt(1 - selectedCluster.correlation * selectedCluster.correlation) * z2);
+                selectedCluster.stdY * (selectedCluster.correlation * z1 + selectedCluster.corrSqrt * z2);
       
       coords.push({ x, y });
     }
@@ -550,23 +590,18 @@ function generateXeniumDataset({
 
   // Generate sample summary stats
   const sampleIds = Array.from({ length: numSamples }, (_, i) => `sample_${i + 1}`);
-  const getSampleStat = (data, sampleId, func) => {
-    const sampleData = data.filter((_, i) => cellRnaStats.sample_id[i] === sampleId);
-    return func(sampleData);
-  };
-
   const sampleSummaryStats = {
     sample_id: sampleIds,
     rna_num_barcodes: Array.from({ length: numSamples }, () => cellsPerSample * 2),
     rna_num_barcodes_filtered: Array.from({ length: numSamples }, () => cellsPerSample),
     rna_sum_total_counts: sampleIds.map(id =>
-      getSampleStat(cellRnaStats.total_counts, id, arr => arr.reduce((a, b) => a + b, 0))
+      getSampleStat(cellRnaStats.total_counts, id, arr => arr.reduce((a, b) => a + b, 0), cellRnaStats.sample_id)
     ),
     rna_median_total_counts: sampleIds.map(id =>
       getSampleStat(cellRnaStats.total_counts, id, arr => {
         const sorted = [...arr].sort((a, b) => a - b);
         return sorted[Math.floor(sorted.length / 2)];
-      })
+      }, cellRnaStats.sample_id)
     ),
     rna_overall_num_nonzero_vars: Array.from({ length: numSamples }, () =>
       Math.max(...nonzeroVarsRange) * 9
@@ -575,7 +610,7 @@ function generateXeniumDataset({
       getSampleStat(cellRnaStats.num_nonzero_vars, id, arr => {
         const sorted = [...arr].sort((a, b) => a - b);
         return sorted[Math.floor(sorted.length / 2)];
-      })
+      }, cellRnaStats.sample_id)
     ),
     control_probe_percentage: Array.from({ length: numSamples }, () => 0),
     negative_decoding_percentage: Array.from({ length: numSamples }, () => 0)
@@ -681,57 +716,6 @@ function generateXeniumStructure() {
     ]
   };
 }
-
-// Generator configurations
-const generators = {
-  sc: {
-    label: 'Single-cell dataset',
-    dataFun: generateScDataset,
-    structureFun: generateScStructure
-  },
-  sc_large: {
-    label: 'Large-scale single-cell dataset',
-    dataFun: () => generateScDataset({
-      numSamples: 10,
-      cellsPerSample: 120000,
-      totalCountsRange: [500, 15000],
-      nonzeroVarsRange: [1000, 8000],
-      cellbenderBackgroundMean: 0.15,
-      cellbenderBackgroundSd: 0.1,
-      cellSizeBase: 25,
-      cellSizeSd: 15,
-      dropletEfficiencyBase: 0.95,
-      dropletEfficiencyRange: 0.03,
-      mitoFractionMean: 0.05,
-      mitoFractionSd: 0.03,
-      riboFractionMean: 0.15,
-      riboFractionSd: 0.05
-    }),
-    structureFun: generateScStructure
-  },
-  xenium: {
-    label: 'Xenium dataset',
-    dataFun: generateXeniumDataset,
-    structureFun: generateXeniumStructure
-  },
-  xenium_large: {
-    label: 'Large-scale Xenium dataset',
-    dataFun: () => generateXeniumDataset({
-      numSamples: 8,
-      cellsPerSample: 150000,
-      totalCountsRange: [50, 800],
-      nonzeroVarsRange: [20, 150],
-      cellAreaRange: [25, 200],
-      nucleusRatioRange: [0.08, 0.45],
-      spatialNoise: 3,
-      mitoFractionMean: 0.06,
-      mitoFractionSd: 0.025,
-      riboFractionMean: 0.18,
-      riboFractionSd: 0.04
-    }),
-    structureFun: generateXeniumStructure
-  }
-};
 
 export {
   generateScDataset,
