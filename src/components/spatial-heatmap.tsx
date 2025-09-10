@@ -23,6 +23,7 @@ export interface SpatialHeatmapProps {
   yCoords: number[];
   values: number[];
   groupIds?: number[] | null;
+  groupLabels?: string[] | null;
   title: string;
   colorField: string;
   faceted?: boolean;
@@ -40,98 +41,100 @@ export function SpatialHeatmap(props: SpatialHeatmapProps) {
   const [binData, setBinData] = createSignal<SpatialBinData>();
   const [isProcessing, setIsProcessing] = createSignal(false);
 
-  // Use precomputed bins if available, otherwise compute on mount
-  onMount(() => {
+  // Reactive computation of bins - updates when props change
+  const computeBins = createMemo(() => {
     if (props.precomputedBins) {
       // Use precomputed bins immediately
       setBinData(props.precomputedBins);
       console.log(`✅ Using precomputed spatial bins (${props.precomputedBins.numBinsX}×${props.precomputedBins.numBinsY})`);
-      return;
+      return props.precomputedBins;
     }
-    
     // Fallback: compute bins ourselves
     setIsProcessing(true);
     
-    const computeBinning = () => {
-      try {
-        const xCoords = props.xCoords;
-        const yCoords = props.yCoords;
-        const numBinsX = props.numBinsX || 50;
-        const numBinsY = props.numBinsY || 50;
+    try {
+      const xCoords = props.xCoords;
+      const yCoords = props.yCoords;
+      const numBinsX = props.numBinsX || 50;
+      const numBinsY = props.numBinsY || 50;
 
-        // Calculate bounds with small offset to avoid edge cases
-        const xMin = (_.min(xCoords) || 0) - 1e-6;
-        const xMax = (_.max(xCoords) || 0) + 1e-6;
-        const yMin = (_.min(yCoords) || 0) - 1e-6;
-        const yMax = (_.max(yCoords) || 0) + 1e-6;
-
-        const binWidthX = (xMax - xMin) / numBinsX;
-        const binWidthY = (yMax - yMin) / numBinsY;
-
-        // Create bin centers
-        const xBinCenters = Array.from({ length: numBinsX }, (_, i) => 
-          xMin + (i + 0.5) * binWidthX
-        );
-        const yBinCenters = Array.from({ length: numBinsY }, (_, i) => 
-          yMin + (i + 0.5) * binWidthY
-        );
-
-        // Initialize 2D array for bin indices
-        const binIndices: number[][][] = Array.from({ length: numBinsY }, () => 
-          Array.from({ length: numBinsX }, () => [])
-        );
-
-        // Assign each cell to its bin (this is the expensive operation we do once)
-        for (let i = 0; i < xCoords.length; i++) {
-          const px = xCoords[i];
-          const py = yCoords[i];
-
-          // Find bin indices
-          const xBin = Math.floor((px - xMin) / binWidthX);
-          const yBin = Math.floor((py - yMin) / binWidthY);
-          
-          // Ensure we're within bounds
-          if (xBin >= 0 && xBin < numBinsX && yBin >= 0 && yBin < numBinsY) {
-            binIndices[yBin][xBin].push(i);
-          }
-        }
-
-        setBinData({
-          xMin,
-          xMax,
-          yMin,
-          yMax,
-          numBinsX,
-          numBinsY,
-          binWidthX,
-          binWidthY,
-          xBinCenters,
-          yBinCenters,
-          binIndices
-        });
-
-      } catch (error) {
-        console.error('❌ Spatial binning failed:', error);
-      } finally {
-        setIsProcessing(false);
+      // Calculate bounds with small offset to avoid edge cases
+      // Use manual min/max calculation to avoid "too many arguments" error with large arrays
+      let xMin = xCoords[0];
+      let xMax = xCoords[0];
+      let yMin = yCoords[0];
+      let yMax = yCoords[0];
+      
+      for (let i = 1; i < xCoords.length; i++) {
+        if (xCoords[i] < xMin) xMin = xCoords[i];
+        if (xCoords[i] > xMax) xMax = xCoords[i];
+        if (yCoords[i] < yMin) yMin = yCoords[i];
+        if (yCoords[i] > yMax) yMax = yCoords[i];
       }
-    };
+      
+      xMin -= 1e-6;
+      xMax += 1e-6;
+      yMin -= 1e-6;
+      yMax += 1e-6;
 
-    // Use setTimeout to avoid blocking the UI thread
-    setTimeout(computeBinning, 0);
-  });
+      const binWidthX = (xMax - xMin) / numBinsX;
+      const binWidthY = (yMax - yMin) / numBinsY;
 
-  // Create plot data from the pre-computed bins
-  const plotData = createMemo(() => {
-    const bins = binData();
-    if (!bins) return [];
+      // Create bin centers
+      const xBinCenters = Array.from({ length: numBinsX }, (_, i) => 
+        xMin + (i + 0.5) * binWidthX
+      );
+      const yBinCenters = Array.from({ length: numBinsY }, (_, i) => 
+        yMin + (i + 0.5) * binWidthY
+      );
 
-    if (props.faceted && props.groupIds) {
-      return createFacetedHeatmaps(bins);
+      // Initialize 2D array for bin indices
+      const binIndices: number[][][] = Array.from({ length: numBinsY }, () => 
+        Array.from({ length: numBinsX }, () => [])
+      );
+
+      // Assign each cell to its bin (this is the expensive operation we do once)
+      for (let i = 0; i < xCoords.length; i++) {
+        const px = xCoords[i];
+        const py = yCoords[i];
+
+        // Find bin indices
+        const xBin = Math.floor((px - xMin) / binWidthX);
+        const yBin = Math.floor((py - yMin) / binWidthY);
+        
+        // Ensure we're within bounds
+        if (xBin >= 0 && xBin < numBinsX && yBin >= 0 && yBin < numBinsY) {
+          binIndices[yBin][xBin].push(i);
+        }
+      }
+
+      const result = {
+        xMin,
+        xMax,
+        yMin,
+        yMax,
+        numBinsX,
+        numBinsY,
+        binWidthX,
+        binWidthY,
+        xBinCenters,
+        yBinCenters,
+        binIndices
+      };
+      
+      setBinData(result);
+      setIsProcessing(false);
+      return result;
+
+    } catch (error) {
+      console.error('❌ Spatial binning failed:', error);
+      setIsProcessing(false);
+      return undefined;
     }
-    
-    return createSingleHeatmap(bins);
   });
+
+  // Trigger computation whenever dependencies change
+  onMount(() => computeBins());
 
   // Create single heatmap (no grouping)
   const createSingleHeatmap = (bins: SpatialBinData): Partial<PlotData>[] => {
@@ -140,7 +143,14 @@ export function SpatialHeatmap(props: SpatialHeatmapProps) {
       row.map(cellIndices => {
         if (cellIndices.length === 0) return null;
         const values = cellIndices.map(i => props.values[i]).filter(v => v != null);
-        return values.length > 0 ? _.mean(values) : null;
+        if (values.length === 0) return null;
+        
+        // Manual mean calculation to avoid "too many arguments" error
+        let sum = 0;
+        for (let i = 0; i < values.length; i++) {
+          sum += values[i];
+        }
+        return sum / values.length;
       })
     );
 
@@ -178,40 +188,115 @@ export function SpatialHeatmap(props: SpatialHeatmapProps) {
     }];
   };
 
-  // Create faceted heatmaps (separate subplot per group)
-  const createFacetedHeatmaps = (bins: SpatialBinData): Partial<PlotData>[] => {
+  // Create faceted heatmaps with per-sample binning
+  const createFacetedHeatmaps = (_bins: SpatialBinData): Partial<PlotData>[] => {
     if (!props.groupIds) return [];
 
     const uniqueGroups = Array.from(new Set(props.groupIds)).sort();
     
     return uniqueGroups.map((group, idx) => {
-      // Calculate average value for each bin for this group only
-      const zValues = bins.binIndices.map(row =>
-        row.map(cellIndices => {
-          // Filter cells that belong to this group
-          const groupCellIndices = cellIndices.filter(i => props.groupIds![i] === group);
-          if (groupCellIndices.length === 0) return null;
-          
-          const values = groupCellIndices.map(i => props.values[i]).filter(v => v != null);
-          return values.length > 0 ? _.mean(values) : null;
-        })
+      // Get coordinates and values for this group only
+      const groupIndices = props.groupIds!.map((gId, i) => gId === group ? i : -1).filter(i => i >= 0);
+      const groupXCoords = groupIndices.map(i => props.xCoords[i]);
+      const groupYCoords = groupIndices.map(i => props.yCoords[i]);
+      const groupValues = groupIndices.map(i => props.values[i]);
+      
+      if (groupXCoords.length === 0) return null;
+      
+      // Compute separate bins for this group to maintain square aspect ratio
+      // Use manual min/max calculation to avoid "too many arguments" error with large arrays
+      let xMin = groupXCoords[0];
+      let xMax = groupXCoords[0];
+      let yMin = groupYCoords[0];
+      let yMax = groupYCoords[0];
+      
+      for (let i = 1; i < groupXCoords.length; i++) {
+        if (groupXCoords[i] < xMin) xMin = groupXCoords[i];
+        if (groupXCoords[i] > xMax) xMax = groupXCoords[i];
+        if (groupYCoords[i] < yMin) yMin = groupYCoords[i];
+        if (groupYCoords[i] > yMax) yMax = groupYCoords[i];
+      }
+      
+      xMin -= 1e-6;
+      xMax += 1e-6;
+      yMin -= 1e-6;
+      yMax += 1e-6;
+      
+      const xRange = xMax - xMin;
+      const yRange = yMax - yMin;
+      const aspectRatio = xRange / yRange;
+      
+      // Calculate bins to maintain square aspect ratio
+      let numBinsX = props.numBinsX || 50;
+      let numBinsY = props.numBinsY || 50;
+      
+      if (aspectRatio > 1) {
+        numBinsY = Math.round(numBinsX / aspectRatio);
+      } else {
+        numBinsX = Math.round(numBinsY * aspectRatio);
+      }
+      
+      const binWidthX = xRange / numBinsX;
+      const binWidthY = yRange / numBinsY;
+      
+      // Create bin centers
+      const xBinCenters = Array.from({ length: numBinsX }, (_, i) => 
+        xMin + (i + 0.5) * binWidthX
       );
-
-      // Calculate cell counts for this group
-      const cellCounts = bins.binIndices.map(row =>
-        row.map(cellIndices => cellIndices.filter(i => props.groupIds![i] === group).length)
+      const yBinCenters = Array.from({ length: numBinsY }, (_, i) => 
+        yMin + (i + 0.5) * binWidthY
       );
+      
+      // Initialize 2D arrays for values and counts
+      const zValues: (number | null)[][] = Array.from({ length: numBinsY }, () => 
+        Array.from({ length: numBinsX }, () => null)
+      );
+      const cellCounts: number[][] = Array.from({ length: numBinsY }, () => 
+        Array.from({ length: numBinsX }, () => 0)
+      );
+      
+      // Accumulate values in bins
+      const binSums: number[][] = Array.from({ length: numBinsY }, () => 
+        Array.from({ length: numBinsX }, () => 0)
+      );
+      
+      for (let i = 0; i < groupXCoords.length; i++) {
+        const px = groupXCoords[i];
+        const py = groupYCoords[i];
+        const value = groupValues[i];
+        
+        if (value == null) continue;
+        
+        // Find bin indices
+        const xBin = Math.floor((px - xMin) / binWidthX);
+        const yBin = Math.floor((py - yMin) / binWidthY);
+        
+        // Ensure we're within bounds
+        if (xBin >= 0 && xBin < numBinsX && yBin >= 0 && yBin < numBinsY) {
+          binSums[yBin][xBin] += value;
+          cellCounts[yBin][xBin]++;
+        }
+      }
+      
+      // Calculate averages
+      for (let yBin = 0; yBin < numBinsY; yBin++) {
+        for (let xBin = 0; xBin < numBinsX; xBin++) {
+          if (cellCounts[yBin][xBin] > 0) {
+            zValues[yBin][xBin] = binSums[yBin][xBin] / cellCounts[yBin][xBin];
+          }
+        }
+      }
 
       return {
         type: "heatmap" as const,
-        x: bins.xBinCenters,
-        y: bins.yBinCenters,
+        x: xBinCenters,
+        y: yBinCenters,
         z: zValues,
         colorscale: 'Viridis',
         hoverongaps: false,
         customdata: cellCounts,
         hovertemplate: 
-          `<b>Group ${group}</b><br>` +
+          `<b>${props.groupLabels && props.groupLabels[group] ? props.groupLabels[group] : `Sample ${group + 1}`}</b><br>` +
           `<b>${props.colorField}</b>: %{z:.3f}<br>` +
           '<b>Cells in bin</b>: %{customdata}<br>' +
           '<b>X</b>: %{x:.2f}<br>' +
@@ -226,19 +311,19 @@ export function SpatialHeatmap(props: SpatialHeatmapProps) {
         xaxis: `x${idx + 1}`,
         yaxis: `y${idx + 1}`
       };
-    });
+    }).filter(Boolean) as Partial<PlotData>[];
   };
 
-  // Create layout
-  const layout = createMemo((): Partial<Layout> => {
+  // Create plot data from the pre-computed bins
+  const plotData = createMemo(() => {
     const bins = binData();
-    if (!bins) return {};
+    if (!bins) return [];
 
     if (props.faceted && props.groupIds) {
-      return createFacetedLayout(bins);
+      return createFacetedHeatmaps(bins);
     }
-
-    return createSingleLayout(bins);
+    
+    return createSingleHeatmap(bins);
   });
 
   // Create single layout
@@ -288,11 +373,15 @@ export function SpatialHeatmap(props: SpatialHeatmapProps) {
     const cols = Math.ceil(Math.sqrt(numGroups));
     const rows = Math.ceil(numGroups / cols);
 
+    // Calculate subplot dimensions - let width be responsive
+    const baseHeight = 250; // Base height per subplot row
+    const totalHeight = rows * baseHeight;
+
     const layout: any = {
       title: props.title,
       showlegend: false,
-      width: undefined,
-      height: Math.max(400, rows * 250),
+      width: undefined, // Let width be responsive to container
+      height: Math.max(400, totalHeight),
       grid: {
         rows: rows,
         columns: cols,
@@ -308,6 +397,7 @@ export function SpatialHeatmap(props: SpatialHeatmapProps) {
 
       layout[xAxisKey] = {
         title: idx >= numGroups - cols ? 'X Coordinate' : '',
+        // No range setting - let each subplot auto-scale to its data for sample-specific scaling
         showgrid: true,
         zeroline: false,
         scaleanchor: axisNum === 1 ? "y" : `y${axisNum}`,
@@ -315,14 +405,19 @@ export function SpatialHeatmap(props: SpatialHeatmapProps) {
       };
       layout[yAxisKey] = {
         title: idx % cols === 0 ? 'Y Coordinate' : '',
+        // No range setting - let each subplot auto-scale to its data for sample-specific scaling
         showgrid: true,
         zeroline: false
       };
 
-      // Add group title as annotation
+      // Add group title as annotation with proper sample name
+      const groupLabel = props.groupLabels && props.groupLabels[group] 
+        ? props.groupLabels[group] 
+        : `Sample ${group + 1}`;
+        
       if (!layout.annotations) layout.annotations = [];
       layout.annotations.push({
-        text: `<b>Group ${group}</b>`,
+        text: `<b>${groupLabel}</b>`,
         showarrow: false,
         x: 0.5,
         y: 1.02,
@@ -334,6 +429,18 @@ export function SpatialHeatmap(props: SpatialHeatmapProps) {
 
     return layout;
   };
+
+  // Create layout
+  const layout = createMemo((): Partial<Layout> => {
+    const bins = binData();
+    if (!bins) return {};
+
+    if (props.faceted && props.groupIds) {
+      return createFacetedLayout(bins);
+    }
+
+    return createSingleLayout(bins);
+  });
 
   return (
     <div class="w-full">

@@ -598,20 +598,54 @@ const App: Component = () => {
                                       if (xCoordCol && yCoordCol && valueCol) {
                                         // Get precomputed spatial bins if available
                                         const spatialData = getSpatialBinData();
-                                        const precomputedBins = spatialData?.computeBins(50, 50);
+                                        const binning = form.useStore(state => state.values.binning);
+                                        
+                                        // Calculate square bins based on data aspect ratio
+                                        const xCoords = xCoordCol.data as number[];
+                                        const yCoords = yCoordCol.data as number[];
+                                        
+                                        // Use manual min/max calculation to avoid "too many arguments" error with large arrays
+                                        let xMin = xCoords[0], xMax = xCoords[0];
+                                        let yMin = yCoords[0], yMax = yCoords[0];
+                                        
+                                        for (let i = 1; i < xCoords.length; i++) {
+                                          if (xCoords[i] < xMin) xMin = xCoords[i];
+                                          if (xCoords[i] > xMax) xMax = xCoords[i];
+                                          if (yCoords[i] < yMin) yMin = yCoords[i];
+                                          if (yCoords[i] > yMax) yMax = yCoords[i];
+                                        }
+                                        
+                                        const xRange = xMax - xMin;
+                                        const yRange = yMax - yMin;
+                                        const aspectRatio = xRange / yRange;
+                                        
+                                        // Adjust bins to maintain square aspect ratio
+                                        let numBinsX = binning().numBinsX;
+                                        let numBinsY = binning().numBinsY;
+                                        
+                                        if (aspectRatio > 1) {
+                                          // Wider than tall, adjust Y bins
+                                          numBinsY = Math.round(numBinsX / aspectRatio);
+                                        } else {
+                                          // Taller than wide, adjust X bins  
+                                          numBinsX = Math.round(numBinsY * aspectRatio);
+                                        }
+                                        
+                                        const precomputedBins = spatialData?.computeBins(numBinsX, numBinsY);
                                         
                                         return (
                                           <SpatialHeatmap
-                                            xCoords={xCoordCol.data as number[]}
-                                            yCoords={yCoordCol.data as number[]}
+                                            xCoords={xCoords}
+                                            yCoords={yCoords}
                                             values={valueCol.data as number[]}
                                             groupIds={groupCol ? groupCol.data as number[] : null}
+                                            groupLabels={groupCol?.categories || null}
                                             title={`${setting.label || setting.field} Spatial Heatmap`}
                                             colorField={setting.label || setting.field}
                                             faceted={!!groupCol}
                                             height="600px"
-                                            numBinsX={50}
-                                            numBinsY={50}
+                                            numBinsX={numBinsX}
+                                            numBinsY={numBinsY}
                                             precomputedBins={precomputedBins}
                                           />
                                         );
