@@ -640,67 +640,6 @@ const App: Component = () => {
           </For>
         </div>
         
-        {/* 
-        ===========================================
-        CHART COMPONENT USAGE GUIDE
-        ===========================================
-        
-        Use DynamicChart when:
-        ✅ Loading specific columns from existing datasets
-        ✅ Working with raw columnar data
-        ✅ Memory optimization is important
-        ✅ Single data category
-        
-        Example:
-        <DynamicChart
-          categoryKey="cell_rna_stats"
-          columnNames={["total_counts", "pct_counts_mt"]}
-          filterSettings={setting}
-          title="RNA Quality Metrics"
-        >
-          {(optimizedData, metadata) => (
-            <ScatterPlot data={optimizedData} />
-          )}
-        </DynamicChart>
-        
-        Use ProgressiveWrapper when:
-        ✅ Pre-computed or aggregated data
-        ✅ Non-columnar data structures
-        ✅ Cross-category analysis
-        ✅ Custom data transformations
-        ✅ External APIs or computed datasets
-        
-        Example:
-        <ProgressiveWrapper
-          title="Sample Summary"
-          dataLoader={async () => computeSampleSummary(allData)}
-        >
-          {(summaryData) => (
-            <CustomSummaryChart data={summaryData} />
-          )}
-        </ProgressiveWrapper>
-        
-        Use AggregatedChart for pre-computed summaries:
-        <AggregatedChart
-          title="QC Metrics Overview"
-          aggregationFn={async () => calculateQcOverview(data)}
-        >
-          {(overview) => <OverviewDashboard data={overview} />}
-        </AggregatedChart>
-        
-        Use MultiSourceChart for combining datasets:
-        <MultiSourceChart
-          title="Cross-Category Analysis"
-          dataSources={[
-            () => getRnaData(),
-            () => getProteinData(),
-            () => getSpatialData()
-          ]}
-          combiner={(sources) => mergeSources(sources)}
-        >
-          {(mergedData) => <IntegratedAnalysis data={mergedData} />}
-        </MultiSourceChart>
-        */}
         
         <div class="h-64" />
         </div>
