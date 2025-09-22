@@ -1,6 +1,6 @@
 {
-  "name": "incubator_ingestion_qc",
-  "version": "0.0.0",
+  "name": "siqc",
+  "version": "0.1.0",
   "description": "",
   "type": "module",
   "scripts": {
