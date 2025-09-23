@@ -1,7 +1,7 @@
 {
-  "name": "qc-report-generator",
-  "version": "0.1.0",
-  "description": "Generate interactive QC reports from scientific data with progressive loading and spatial visualization",
+  "name": "siqc",
+  "version": "0.2.0",
+  "description": "Generate Scalable Interactive Quality Control reports",
   "type": "module",
   "bin": {
     "qc-report": "./cli.js"
