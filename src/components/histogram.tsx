@@ -5,6 +5,36 @@ import { cutoffShape, plotlyConfig, recurringColours, createAxisAnnotation } fro
 import { calculateBinCounts, createBinLabels } from "~/lib/histogram-utils";
 import { FilterSettings, RawDataCategory } from "~/types";
 
+/**
+ * Compute reasonable auto-zoom range for histogram data
+ * Excludes extreme outliers to get a better view of the main data distribution
+ */
+function computeAutoZoomRange(values: number[], globalMin: number, globalMax: number) {
+  if (values.length === 0) {
+    return { min: globalMin, max: globalMax };
+  }
+  
+  // Sort values to compute percentiles
+  const sortedValues = [...values].sort((a, b) => a - b);
+  const n = sortedValues.length;
+  
+  // Use 1st and 99th percentiles to exclude extreme outliers
+  const p1Index = Math.floor(n * 0.01);
+  const p99Index = Math.floor(n * 0.99);
+  
+  const p1 = sortedValues[p1Index] || globalMin;
+  const p99 = sortedValues[p99Index] || globalMax;
+  
+  // Add some padding (5% on each side)
+  const range = p99 - p1;
+  const padding = range * 0.05;
+  
+  const autoMin = Math.max(globalMin, p1 - padding);
+  const autoMax = Math.min(globalMax, p99 + padding);
+  
+  return { min: autoMin, max: autoMax };
+}
+
 type Props = {
   data: RawDataCategory;
   filterSettings: FilterSettings;
@@ -33,12 +63,21 @@ function histogramData(props: {
 
   const globalMin = _.min(values)!;
   const globalMax = _.max(values)!;
-  const actualMin = props.zoomMin !== undefined ? props.zoomMin : globalMin;
-  const actualMax = props.zoomMax !== undefined ? props.zoomMax : globalMax;
-  const binSize = (actualMax - actualMin) / props.numBins;
+  
+  // Auto-compute reasonable zoom range if not specified or if values are null
+  const autoZoomRange = computeAutoZoomRange(values, globalMin, globalMax);
+  const actualMin = (props.zoomMin !== undefined && props.zoomMin !== null) ? props.zoomMin : autoZoomRange.min;
+  const actualMax = (props.zoomMax !== undefined && props.zoomMax !== null) ? props.zoomMax : autoZoomRange.max;
+  
+  // Auto-compute reasonable number of bins if too many or too few
+  const dataRange = actualMax - actualMin;
+  const autoBins = Math.min(Math.max(Math.ceil(Math.sqrt(values.length)), 20), 100);
+  const effectiveNumBins = (props.numBins < 10 || props.numBins > 200) ? autoBins : props.numBins;
+  
+  const binSize = (actualMax - actualMin) / effectiveNumBins;
 
   const { binCounts, groupCounts } = calculateBinCounts(
-    values, actualMin, actualMax, props.numBins, groupValues
+    values, actualMin, actualMax, effectiveNumBins, groupValues
   );
 
   const roundingBase = Math.floor(Math.log10(binSize));
@@ -48,7 +87,7 @@ function histogramData(props: {
   const x = x0.map((start, i) => (start + x1[i]) / 2);
   
   const binLabels = createBinLabels(
-    binCounts, x0, x1, roundFun, globalMin, globalMax, props.numBins
+    binCounts, x0, x1, roundFun, globalMin, globalMax, effectiveNumBins
   );
 
   const plotOverall = (props.additionalAxes && props.groupName !== undefined) ||

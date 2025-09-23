@@ -9,56 +9,56 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dataset:
+          - name: single-cell
+            type: sc
+            path: resources_test/sc_dataset
+            output: single-cell-report.html
+          - name: single-cell-large
+            type: sc_large
+            path: resources_test/sc_dataset_large
+            output: single-cell-large-report.html
+          - name: spatial
+            type: xenium
+            path: resources_test/xenium_dataset
+            output: spatial-report.html
+          - name: spatial-large
+            type: xenium_large
+            path: resources_test/xenium_dataset_large
+            output: spatial-large-report.html
+      fail-fast: false
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          run_install: false
-
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          cache: 'pnpm'
-
-      - name: Set up R
-        uses: r-lib/actions/setup-r@v2
-
-      - name: Install jsonlite
-        run: Rscript -e "install.packages('jsonlite')"
+          cache: 'npm'
 
       - name: Install dependencies
-        run: pnpm install
+        run: npm install
+
+      - name: Install CLI tool globally
+        run: npm install -g .
 
       - name: Prepare output directory
-        run: mkdir output
+        run: mkdir -p output
 
-      - name: Build single-cell report
+      - name: Generate test data for ${{ matrix.dataset.name }}
+        run: siqc generate-test-data --type ${{ matrix.dataset.type }} --output ${{ matrix.dataset.path }}
+
+      - name: Build ${{ matrix.dataset.name }} report using CLI
         run: |
-          pnpm run generate_data sc resources_test/sc_dataset
-          pnpm run compress_data resources_test/sc_dataset/structure.json src/data/report_structure.ts
-          pnpm run compress_data resources_test/sc_dataset/data.json src/data/dataset.ts
-          pnpm run build
-          mv dist/index.html output/single-cell-report.html
+          siqc render \
+            --data ${{ matrix.dataset.path }}/data.json \
+            --structure ${{ matrix.dataset.path }}/structure.json \
+            --output output/${{ matrix.dataset.output }}
 
-      - name: Build spatial report
-        run: |
-          pnpm run generate_data xenium resources_test/xenium_dataset
-          pnpm run compress_data resources_test/xenium_dataset/structure.json src/data/report_structure.ts
-          pnpm run compress_data resources_test/xenium_dataset/data.json src/data/dataset.ts
-          pnpm run build
-          mv dist/index.html output/spatial-report.html
-
-      - name: Upload single-cell report
+      - name: Upload ${{ matrix.dataset.name }} report
         uses: actions/upload-artifact@v4
         with:
-          name: single-cell-report
-          path: output/single-cell-report.html
-
-      - name: Upload single-cell report
-        uses: actions/upload-artifact@v4
-        with:
-          name: spatial-report
-          path: output/spatial-report.html
+          name: ${{ matrix.dataset.name }}-report
+          path: output/${{ matrix.dataset.output }}

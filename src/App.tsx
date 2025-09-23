@@ -1,31 +1,33 @@
 import {
   createEffect,
   createSignal,
+  createMemo,
   For,
   Match,
   Show,
   Switch,
   type Component,
+  Suspense,
 } from "solid-js";
 import { createStore, produce } from "solid-js/store";
 import { ReportStructure, FilterSettings, RawData, Settings } from "./types";
-import * as _ from "lodash";
 import { H1, H2, H3 } from "./components/heading";
-import { getData, getReportStructure } from "./lib/get-data";
+import { getData, getReportStructure, initializeDataLoader } from "./lib/get-data";
+import { progressiveDataAdapter } from "./lib/progressive-data-adapter";
 import { Histogram } from "./components/histogram";
 import { FilterSettingsForm } from "./components/app/filter-settings-form";
 import { DataSummaryTable } from "./components/app/data-summary-table";
 import { BarPlot } from "./components/barplot";
-import { ScatterPlot } from "./components/scatterplot";
-import { createMemo } from "solid-js";
 import { SampleFilterForm } from "./components/app/sample-filter-form";
 import { filterData, calculateQcPassCells, getPassingCellIndices } from "./lib/data-filters";
 import { transformSampleMetadata } from "./lib/sample-utils";
 import { createSettingsForm, SettingsFormProvider } from "./components/app/settings-form";
 import { GlobalVisualizationSettings } from "./components/app/global-visualization-settings";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./components/ui/collapsible";
-import { Heatmap } from "~/components/heatmap";
-
+import { SpatialHeatmap } from "./components/spatial-heatmap";
+import { ChartPlaceholder } from "./lib/progressive-loading";
+import { DynamicChart } from "./components/dynamic-chart";
+import { PerformanceDashboard } from "./components/performance-dashboard";
 
 const App: Component = () => {
   const [reportStructure, setReportStructure] = createSignal<ReportStructure>({categories: []});
@@ -38,12 +40,38 @@ const App: Component = () => {
 
   // read data in memory
   createEffect(async () => {
-    console.log("reading qc categories");
+    const initStart = performance.now();
+    
+    await initializeDataLoader();
+    
+    // Start preloading critical data in parallel
+    const preloadPromises = [
+      progressiveDataAdapter.preloadCriticalData().catch(error => {
+        console.warn("⚠️ Critical data preloading failed:", error);
+      }),
+      // Also preload common columns through data loader
+      import('./lib/data-loader').then(({ dataLoader }) => {
+        return dataLoader.preloadCommonColumns().catch(error => {
+          console.warn("⚠️ Common columns preloading failed:", error);
+        });
+      })
+    ];
+    
     setReportStructure(await getReportStructure());
 
-    console.log("reading data");
     const data = await getData();
     setData(data);
+    
+    // Wait for all preloading to complete (optional, runs in background)
+    Promise.all(preloadPromises).then(() => {
+      // Preloading completed silently
+    });
+    
+    const initTime = performance.now() - initStart;
+    // Only log initialization time in development
+    if (import.meta.env.DEV) {
+      console.log(`✅ Progressive initialization completed in ${initTime.toFixed(2)}ms`);
+    }
     
     // make sure to set the initial selected samples
     const sampleIds = data.sample_summary_stats?.columns.find(col => col.name === "sample_id")?.categories || [];
@@ -114,6 +142,7 @@ const App: Component = () => {
     
     // Filter the cell_rna_stats data
     const passingIndices = Array.from(passingCellIndices);
+    
     if (passingIndices.length < cellsData.num_rows) {
       result.cell_rna_stats = {
         ...cellsData,
@@ -128,81 +157,17 @@ const App: Component = () => {
     return result;
   });
 
+  // Create a reactive key that changes when filters are applied
+  const chartDataKey = createMemo(() => {
+    const enabled = filters().enabled;
+    const appliedSettings = filters().appliedSettings;
+    const settingsHash = JSON.stringify(appliedSettings);
+    return `${enabled}-${settingsHash}`;
+  });
+
   const binning = form.useStore(state => state.values.binning);
 
-  const binIndices = createMemo(() => {
-    // TODO: Could compute the binIndices on the filteredData, and only apply the QC filtering afterwards to
-    // avoid recomputing the indices every time the filters change.
-    const dataSource = filters().enabled ? fullyFilteredData() : filteredData();
-    if (!dataSource) return undefined;
-    if (!binning().enabled) return undefined;
 
-    // Get the x and y coordinates from the cell_rna_stats data
-    const xCol = dataSource.cell_rna_stats.columns.find(col => col.name === binning().xCol);
-    const yCol = dataSource.cell_rna_stats.columns.find(col => col.name === binning().yCol);
-
-    if (!xCol || !yCol) return undefined;
-    if (xCol.dtype !== "numeric" || yCol.dtype !== "numeric") {
-      console.error("Grid binning requires numeric coordinates");
-      return undefined;
-    }
-    const xCoord = xCol!.data as number[];
-    const yCoord = yCol!.data as number[];
-
-    if (!xCoord || !yCoord) return undefined;
-
-    // Add a small offset to avoid having cells fall exactly on the bin edges
-    const xMin = _.min(xCoord)! - 1e-6;
-    const xMax = _.max(xCoord)! + 1e-6;
-    const yMin = _.min(yCoord)! - 1e-6;
-    const yMax = _.max(yCoord)! + 1e-6;
-    const numBinsX = binning().numBinsX;
-    const numBinsY = binning().numBinsY;
-    const binWidthX = (xMax - xMin) / numBinsX;
-    const binWidthY = (yMax - yMin) / numBinsY;
-
-    // Create regular rectangular grid - bins represent center coordinates
-    const xBinCenters = Array.from({ length: numBinsX }, (_, i) => 
-      xMin + (i + 0.5) * binWidthX
-    );
-    const yBinCenters = Array.from({ length: numBinsY }, (_, i) => 
-      yMin + (i + 0.5) * binWidthY
-    );
-
-    // Create 2D array to store cell indices for each bin
-    const binIndices: number[][][] = Array.from({ length: numBinsY }, () => 
-      Array.from({ length: numBinsX }, () => [])
-    );
-
-    // Assign each cell to its corresponding bin
-    for (let i = 0; i < xCoord.length; i++) {
-      const px = xCoord[i];
-      const py = yCoord[i];
-
-      // Find bin indices
-      const xBin = Math.floor((px - xMin) / binWidthX);
-      const yBin = Math.floor((py - yMin) / binWidthY);
-      
-      // Ensure we're within bounds
-      if (xBin >= 0 && xBin < numBinsX && yBin >= 0 && yBin < numBinsY) {
-        binIndices[yBin][xBin].push(i);
-      }
-    }
-
-    return {
-      xMin,
-      xMax,
-      yMin,
-      yMax,
-      numBinsX,
-      numBinsY,
-      binWidthX,
-      binWidthY,
-      xBinCenters,
-      yBinCenters,
-      binIndices
-    };
-  })
 
   // initialise filtersettings
   const [settings, setSettings] = createStore<Settings>(
@@ -211,8 +176,6 @@ const App: Component = () => {
 
   createEffect(() => {
     for (const category of reportStructure().categories) {
-      console.log(`setting ${category.name} filters`);
-
       const columnNames =
         data()?.[category.key].columns.map((x) => x.name) ?? [];
 
@@ -246,13 +209,13 @@ const App: Component = () => {
     // Iterate through all categories and filters
     for (const categoryKey in exportSettings) {
       exportSettings[categoryKey].forEach((filter: FilterSettings) => {
-        // Add min threshold if it exists
-        if (filter.cutoffMin !== undefined) {
+        // Add min threshold if it exists (check for both null and undefined)
+        if (filter.cutoffMin !== undefined && filter.cutoffMin !== null) {
           yamlContent += `min_${filter.field}: ${filter.cutoffMin}\n`;
         }
         
-        // Add max threshold if it exists
-        if (filter.cutoffMax !== undefined) {
+        // Add max threshold if it exists (check for both null and undefined)
+        if (filter.cutoffMax !== undefined && filter.cutoffMax !== null) {
           yamlContent += `max_${filter.field}: ${filter.cutoffMax}\n`;
         }
       });
@@ -307,8 +270,24 @@ const App: Component = () => {
   // page layout
   return (
     <SettingsFormProvider form={form}>
-      <div class="container mx-a space-y-2">
+      <Suspense fallback={
+        <div class="container mx-a space-y-2">
+          <H1>OpenPipelines Ingestion QC Report</H1>
+          <div class="flex items-center justify-center py-12">
+            <div class="text-center">
+              <div class="animate-spin text-4xl mb-4">⚙️</div>
+              <div class="text-lg font-medium text-gray-700">Loading QC Report...</div>
+              <div class="text-sm text-gray-500 mt-2">Initializing progressive data loader</div>
+            </div>
+          </div>
+        </div>
+      }>
+        <div class="container mx-a space-y-2">
         <H1>OpenPipelines Ingestion QC Report</H1>
+        
+        {/* Performance monitoring dashboard */}
+        <PerformanceDashboard />
+        
         <SampleFilterForm sampleMetadata={sampleMetadata()} data={data()} />
         <GlobalVisualizationSettings getCategoricalColumns={getCategoricalColumns} />
         <For each={reportStructure().categories}>
@@ -433,53 +412,114 @@ const App: Component = () => {
                             <div class="flex flex-col space-y-2">
                               <Switch>
                                 <Match when={!data()}>
-                                  <div>Loading...</div>
+                                  <ChartPlaceholder title="Loading data..." height="400px" />
                                 </Match>
                                 <Match when={setting.type === "bar"}>
-                                  <BarPlot
-                                    data={(filters().enabled ? fullyFilteredData() : filteredData())![category.key]}
-                                    filterSettings={{
-                                      ...setting,
-                                      groupBy: currentFilterGroupBy()
+                                  <DynamicChart
+                                    categoryKey={String(category.key)}
+                                    columnNames={[setting.field, ...(currentFilterGroupBy() ? [currentFilterGroupBy()!] : [])]}
+                                    filterSettings={setting}
+                                    groupBy={currentFilterGroupBy()}
+                                    title={`${setting.label} Bar Chart`}
+                                    height="400px"
+                                    dataProvider={() => {
+                                      const data = (filters().enabled ? fullyFilteredData() : filteredData())?.[category.key];
+                                      console.log(`📈 Bar chart dataProvider called for ${setting.field}, enabled: ${filters().enabled}, rows: ${data?.num_rows || 'undefined'}`);
+                                      return data;
                                     }}
-                                  />
+                                  >
+                                    {(chartData, metadata) => (
+                                      <BarPlot
+                                        data={chartData}
+                                        filterSettings={{
+                                          ...setting,
+                                          groupBy: currentFilterGroupBy()
+                                        }}
+                                      />
+                                    )}
+                                  </DynamicChart>
                                 </Match>
                                 <Match when={setting.type === "histogram" && 
                                             (setting.visualizationType === "histogram" || !setting.visualizationType)}>
-                                  <Histogram
-                                    data={(filters().enabled ? fullyFilteredData() : filteredData())![category.key]}
-                                    filterSettings={{
-                                      ...setting,
-                                      groupBy: currentFilterGroupBy()
-                                    }}
-                                    additionalAxes={category.additionalAxes}
-                                  />
+                                  <DynamicChart
+                                    categoryKey={String(category.key)}
+                                    columnNames={[
+                                      setting.field, 
+                                      ...(setting.yField ? [setting.yField] : []),
+                                      ...(currentFilterGroupBy() ? [currentFilterGroupBy()!] : [])
+                                    ]}
+                                    filterSettings={setting}
+                                    groupBy={currentFilterGroupBy()}
+                                    title={`${setting.label} Histogram`}
+                                    height="400px"
+                                    dataProvider={() => (filters().enabled ? fullyFilteredData() : filteredData())?.[category.key]}
+                                  >
+                                    {(chartData, metadata) => (
+                                      <Histogram
+                                        data={chartData}
+                                        filterSettings={{
+                                          ...setting,
+                                          groupBy: currentFilterGroupBy()
+                                        }}
+                                        additionalAxes={category.additionalAxes}
+                                      />
+                                    )}
+                                  </DynamicChart>
                                 </Match>
-                                {/* Spatial visualization with conditional binning */}
+                                {/* Spatial visualization */}
                                 <Match when={setting.type === "histogram" && setting.visualizationType === "spatial"}>
-                                  <Show when={binning().enabled && binIndices()}>
-                                    <Heatmap
-                                      data={(filters().enabled ? fullyFilteredData() : filteredData())![category.key]}
-                                      binData={binIndices()!}
-                                      filterSettings={{
-                                        ...setting,
-                                        groupBy: currentFilterGroupBy()
-                                      }}
-                                      colorFieldName={setting.field}
-                                    />
-                                  </Show>
-                                  
-                                  <Show when={!binning().enabled || !binIndices()}>
-                                    <ScatterPlot
-                                      data={(filters().enabled ? fullyFilteredData() : filteredData())?.cell_rna_stats!}
-                                      filterSettings={{
-                                        ...setting,
-                                        groupBy: currentFilterGroupBy()
-                                      }}
-                                      additionalAxes={category.additionalAxes}
-                                      colorFieldName={setting.field}
-                                    />
-                                  </Show>
+                                  <DynamicChart
+                                    categoryKey={String(category.key)}
+                                    columnNames={[
+                                      setting.field,
+                                      "x_coord",
+                                      "y_coord",
+                                      ...(currentFilterGroupBy() ? [currentFilterGroupBy()!] : [])
+                                    ]}
+                                    filterSettings={setting}
+                                    groupBy={currentFilterGroupBy()}
+                                    title={`${setting.label} Spatial Heatmap`}
+                                    height="600px"
+                                    dataProvider={() => (filters().enabled ? fullyFilteredData() : filteredData())?.[category.key]}
+                                  >
+                                    {(chartData, metadata) => {
+                                      // Extract coordinate data
+                                      const xCoordCol = chartData.columns?.find((col: any) => col.name === "x_coord");
+                                      const yCoordCol = chartData.columns?.find((col: any) => col.name === "y_coord");
+                                      const valueCol = chartData.columns?.find((col: any) => col.name === setting.field);
+                                      const groupCol = currentFilterGroupBy() 
+                                        ? chartData.columns?.find((col: any) => col.name === currentFilterGroupBy())
+                                        : null;
+                                      
+                                      if (xCoordCol && yCoordCol && valueCol) {
+                                        const binning = form.useStore(state => state.values.binning);
+                                        
+                                        return (
+                                          <SpatialHeatmap
+                                            xCoords={xCoordCol.data as number[]}
+                                            yCoords={yCoordCol.data as number[]}
+                                            values={valueCol.data as number[]}
+                                            groupIds={groupCol ? groupCol.data as number[] : null}
+                                            groupLabels={groupCol?.categories || null}
+                                            title={`${setting.label || setting.field} Spatial Heatmap`}
+                                            colorField={setting.label || setting.field}
+                                            faceted={!!groupCol}
+                                            height="600px"
+                                            numBinsX={binning().numBinsX}
+                                            numBinsY={binning().numBinsY}
+                                          />
+                                        );
+                                      }
+                                      
+                                      // Fallback message if data is missing
+                                      return (
+                                        <div class="text-gray-500 p-4">
+                                          Missing coordinate data for spatial visualization. 
+                                          Required: x_coord, y_coord, and {setting.field}.
+                                        </div>
+                                      );
+                                    }}
+                                  </DynamicChart>
                                 </Match>
                               </Switch>
                               <FilterSettingsForm
@@ -516,11 +556,22 @@ const App: Component = () => {
                 {(field) => (
                   <button 
                     onClick={() => {
-                      // Take a snapshot of the current settings and save it as the applied settings
-                      field().handleChange({
-                        enabled: true,
-                        appliedSettings: JSON.parse(JSON.stringify(settings))
-                      });
+                      // Force all input fields to commit their values by blurring any focused element
+                      const activeElement = document.activeElement as HTMLElement;
+                      if (activeElement && activeElement.blur) {
+                        activeElement.blur();
+                      }
+                      
+                      // Use setTimeout to ensure blur events complete before capturing settings
+                      setTimeout(() => {
+                        const settingsSnapshot = JSON.parse(JSON.stringify(settings));
+                        
+                        // Take a snapshot of the current settings and save it as the applied settings
+                        field().handleChange({
+                          enabled: true,
+                          appliedSettings: settingsSnapshot
+                        });
+                      }, 100); // Short delay to allow blur events to process
                     }}
                     class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
                   >
@@ -588,8 +639,11 @@ const App: Component = () => {
             )}
           </For>
         </div>
+        
+        
         <div class="h-64" />
-      </div>
+        </div>
+      </Suspense>
     </SettingsFormProvider>
   );
 };

@@ -1,26 +1,169 @@
 import fs from "fs";
 import pako from "pako";
-import { encode } from "@msgpack/msgpack";
 
-// Get input and output file paths from command line arguments
-const inputFilePath = process.argv[2];
-const outputFilePath = process.argv[3];
+/**
+ * Data Compression Library
+ * 
+ * Columnar binary format data compression using typed binary arrays
+ * 
+ * This module provides library functions for data compression.
+ * Use the main CLI (cli.js) for command-line interface.
+ */
 
-if (!inputFilePath || !outputFilePath) {
-  console.error("Please provide input and output file paths.");
-  process.exit(1);
+/**
+ * Compress data to binary payload format
+ */
+export function compressToBinary(inputFilePath, outputFilePath, structureFilePath) {
+  const data = JSON.parse(fs.readFileSync(inputFilePath, "utf8"));
+  const structure = JSON.parse(fs.readFileSync(structureFilePath, "utf8"));
+  const binaryPayload = packColumnaryBinary(data, structure);
+  
+  // Create output directory if it doesn't exist
+  const outputDir = outputFilePath.substring(0, outputFilePath.lastIndexOf("/"));
+  if (outputDir && !fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
+  
+  fs.writeFileSync(outputFilePath, binaryPayload);
+  return outputFilePath;
 }
 
-// create output directory if it doesn't exist
-const outputDir = outputFilePath.substring(0, outputFilePath.lastIndexOf("/"));
-if (!fs.existsSync(outputDir)) {
-  fs.mkdirSync(outputDir, { recursive: true });
+/**
+ * Compress data to base64 format
+ */
+export function compressToBase64(inputFilePath, outputFilePath) {
+  const data = JSON.parse(fs.readFileSync(inputFilePath, "utf8"));
+  const compressed = pako.gzip(JSON.stringify(data));
+  const encoded = Buffer.from(compressed).toString("base64");
+  
+  // Create output directory if it doesn't exist
+  const outputDir = outputFilePath.substring(0, outputFilePath.lastIndexOf("/"));
+  if (outputDir && !fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
+  
+  fs.writeFileSync(outputFilePath, encoded);
+  return outputFilePath;
 }
 
-console.log(`Compressing ${inputFilePath}...`);
-const data = JSON.parse(fs.readFileSync(inputFilePath, "utf8"));
-
-const compressed = pako.gzip(encode(data));
-const encoded = Buffer.from(compressed).toString("base64");
-
-fs.writeFileSync(outputFilePath, `export const compressed_data = "${encoded}";`);
+/**
+ * Pack data into columnar binary format with gzip compression
+ */
+export function packColumnaryBinary(data, structure) {
+  console.log('Using new columnar binary format...');
+  
+  // Create header with metadata
+  const header = {
+    version: 1,
+    categories: structure.categories.reduce((acc, cat) => {
+      acc[cat.key] = {
+        name: cat.name,
+        key: cat.key,
+        additionalAxes: cat.additionalAxes || false,
+        defaultFilters: cat.defaultFilters || []
+      };
+      return acc;
+    }, {}),
+    columns: [],
+    totalSize: 0
+  };
+  
+  const dataBuffers = [];
+  let currentDataOffset = 0;
+  
+  // Process each category and convert to typed arrays
+  for (const [categoryKey, categoryData] of Object.entries(data)) {
+    if (!categoryData?.columns) {
+      console.warn(`Skipping category ${categoryKey}: no columns found`);
+      continue;
+    }
+    
+    console.log(`Processing category: ${categoryKey}`);
+    
+    for (const column of categoryData.columns) {
+      if (!Array.isArray(column.data)) {
+        console.warn(`Skipping column ${column.name}: data is not an array`);
+        continue;
+      }
+      
+      let typedArray;
+      let dtype;
+      
+      // Determine the appropriate typed array based on data
+      if (column.dtype === 'categorical') {
+        // Store categorical data as indices
+        typedArray = new Int32Array(column.data);
+        dtype = 'categorical';
+      } else if (column.data.every(v => Number.isInteger(v) && v >= -2147483648 && v <= 2147483647)) {
+        typedArray = new Int32Array(column.data);
+        dtype = 'int32';
+      } else {
+        // Convert to numbers and use Float32Array
+        const numericData = column.data.map(v => parseFloat(v) || 0);
+        typedArray = new Float32Array(numericData);
+        dtype = 'float32';
+      }
+      
+      // Add column metadata to header (offset will be adjusted later)
+      header.columns.push({
+        name: column.name,
+        categoryKey: categoryKey,
+        dtype: dtype,
+        offset: currentDataOffset, // Relative to data section for now
+        length: typedArray.length,
+        categories: column.categories || undefined
+      });
+      
+      // Store the binary data
+      dataBuffers.push(typedArray.buffer);
+      currentDataOffset += typedArray.byteLength;
+      
+      console.log(`  Column ${column.name}: ${dtype}, ${typedArray.length} elements, ${typedArray.byteLength} bytes`);
+    }
+  }
+  
+  // Serialize header to JSON bytes (with relative offsets)
+  const headerJson = JSON.stringify(header);
+  const headerBytes = new TextEncoder().encode(headerJson);
+  
+  // Create the final binary layout: [header_length:4][header:N][padding][data:M]
+  // Calculate padding needed for 4-byte alignment of data section
+  const dataStartOffset = 4 + headerBytes.length;
+  const alignment = 4;
+  const padding = (alignment - (dataStartOffset % alignment)) % alignment;
+  const alignedDataStart = dataStartOffset + padding;
+  
+  const totalLength = alignedDataStart + currentDataOffset;
+  const combinedBuffer = new ArrayBuffer(totalLength);
+  const combinedView = new Uint8Array(combinedBuffer);
+  
+  // Write header length (little-endian uint32)
+  const headerLengthView = new DataView(combinedBuffer, 0, 4);
+  headerLengthView.setUint32(0, headerBytes.length, true);
+  
+  // Write header
+  combinedView.set(headerBytes, 4);
+  
+  // Padding bytes are automatically zero in new ArrayBuffer
+  
+  // Write all data buffers at aligned offset
+  let dataOffset = alignedDataStart;
+  for (const buffer of dataBuffers) {
+    combinedView.set(new Uint8Array(buffer), dataOffset);
+    dataOffset += buffer.byteLength;
+  }
+  
+  console.log(`Total uncompressed size: ${totalLength} bytes`);
+  console.log(`Header size: ${headerBytes.length} bytes`);
+  console.log(`Data size: ${currentDataOffset} bytes`);
+  
+  // Compress with gzip
+  const compressed = pako.gzip(combinedView);
+  console.log(`Compressed size: ${compressed.length} bytes (${(compressed.length / totalLength * 100).toFixed(1)}% of original)`);
+  
+  // Encode as base64
+  const base64 = Buffer.from(compressed).toString("base64");
+  console.log(`Base64 size: ${base64.length} characters`);
+  
+  return base64;
+}
