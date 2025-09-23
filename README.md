@@ -1,6 +1,12 @@
 # `siqc`: Generate standalone interactive QC reports from scientific data
 
+[![npm version](https://badge.fury.io/js/siqc.svg)](https://badge.fury.io/js/siqc)
+[![npm downloads](https://img.shields.io/npm/dm/siqc.svg)](https://www.npmjs.com/package/siqc)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 Generate interactive QC reports from scientific data with progressive loading and spatial visualization. Perfect for single-cell genomics, spatial transcriptomics, and other large-scale biological datasets.
+
+**Quick start:** `npm install -g siqc` → `siqc --help`
 
 ## Features
 
@@ -14,10 +20,19 @@ Generate interactive QC reports from scientific data with progressive loading an
 
 ## Installation
 
-### From Git Repository (Recommended)
+### From npm (Recommended)
 
 ```bash
-# Install globally from git repository
+# Install globally from npm
+npm install -g siqc
+# or
+pnpm install -g siqc
+```
+
+### From Git Repository
+
+```bash
+# Install globally from git repository (development version)
 npm install -g git+https://github.com/openpipelines-bio/siqc.git
 # or
 pnpm install -g git+https://github.com/openpipelines-bio/siqc.git
@@ -29,7 +44,7 @@ pnpm install -g git+https://github.com/openpipelines-bio/siqc.git
 git clone https://github.com/openpipelines-bio/siqc.git
 cd siqc
 pnpm install
-# In the following sections, CLI is now available via `pnpm cli`, not `siqc`
+# In development, CLI is available via `pnpm cli` instead of global `siqc`
 ```
 
 ## Quick Start

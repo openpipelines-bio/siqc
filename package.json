@@ -29,8 +29,7 @@
     "render": "node cli.js render",
     "compress": "node cli.js compress",
     "prettier": "prettier -w \"src/**/*.{js,ts,json,css,tsx,jsx}\" \"*.{js,ts,mjs}\"",
-    "clean": "rm -rf dist .cache .temp node_modules src/data",
-    "prepublishOnly": "npm run build"
+    "clean": "rm -rf dist .cache .temp node_modules src/data"
   },
   "keywords": [
     "qc",
