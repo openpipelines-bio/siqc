@@ -1,7 +1,7 @@
 {
   "name": "siqc",
   "version": "0.2.0",
-  "description": "Generate Scalable Interactive Quality Control reports",
+  "description": "Standalone Interactive Quality Control (siqc) report generator",
   "type": "module",
   "bin": {
     "qc-report": "./cli.js"

@@ -1,4 +1,4 @@
-# QC Report Generator
+# `siqc`: Standalone Interactive Quality Control Report Generator
 
 Generate interactive QC reports from scientific data with progressive loading and spatial visualization. Perfect for single-cell genomics, spatial transcriptomics, and other large-scale biological datasets.
 
