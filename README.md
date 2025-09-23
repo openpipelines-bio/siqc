@@ -25,8 +25,6 @@ Generate interactive QC reports from scientific data with progressive loading an
 ```bash
 # Install globally from npm
 npm install -g siqc
-# or
-pnpm install -g siqc
 ```
 
 ### From Git Repository
@@ -34,8 +32,6 @@ pnpm install -g siqc
 ```bash
 # Install globally from git repository (development version)
 npm install -g git+https://github.com/openpipelines-bio/siqc.git
-# or
-pnpm install -g git+https://github.com/openpipelines-bio/siqc.git
 ```
 
 ### Local Development
@@ -43,8 +39,8 @@ pnpm install -g git+https://github.com/openpipelines-bio/siqc.git
 ```bash
 git clone https://github.com/openpipelines-bio/siqc.git
 cd siqc
-pnpm install
-# In development, CLI is available via `pnpm cli` instead of global `siqc`
+npm install
+# In development, CLI is available via `npm run cli` instead of global `siqc`
 ```
 
 ## Quick Start

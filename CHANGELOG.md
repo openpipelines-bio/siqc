@@ -1,9 +1,12 @@
 # siqc 0.2.0
 
+Major refactor of the siqc package (PR #21).
+
 ## Breaking Changes
 * Requires Node.js ≥18.0.0
 * Data format changed from JSON to compressed binary format
 * CLI interface replaces manual build steps
+* Development now uses npm instead of pnpm due to CLI installation issues
 
 ## New Functionality
 * CLI tool with `siqc` command for generating reports
