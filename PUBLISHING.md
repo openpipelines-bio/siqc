@@ -46,7 +46,7 @@ This guide explains how to publish the QC Report Generator package to npm.
 
 3. **Verify the publication:**
    ```bash
-   npm view qc-report-generator
+   npm view siqc
    ```
 
 ## Testing the Published Package
@@ -55,20 +55,20 @@ After publishing, test the global installation:
 
 ```bash
 # Install from npm
-npm install -g qc-report-generator
+npm install -g siqc
 
 # Test the command
-qc-report --help
+siqc --help
 
 # Test with sample data (if available)
 mkdir test-data/
 echo '{"sample": {"columns": [{"name": "test", "dtype": "numeric", "data": [1,2,3]}]}}' > test-data/data.json
 echo '{"title": "Test", "groups": []}' > test-data/structure.json
-qc-report --data-dir ./test-data/ --output ./test-report.html
+siqc --data-dir ./test-data/ --output ./test-report.html
 
 # Clean up
 rm -rf test-data/ test-report.html
-npm uninstall -g qc-report-generator
+npm uninstall -g siqc
 ```
 
 ## Package Contents
@@ -115,5 +115,5 @@ The package is optimized for npm distribution:
 ### Support
 
 For issues and support:
-- GitHub Issues: https://github.com/openpipelines-bio/qc_report_generator/issues
+- GitHub Issues: https://github.com/openpipelines-bio/siqc/issues
 - Documentation: README.md and USAGE.md in the repository

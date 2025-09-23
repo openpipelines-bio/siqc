@@ -6,7 +6,7 @@
 * CLI interface replaces manual build steps
 
 ## New Functionality
-* CLI tool with `qc-report` command for generating reports
+* CLI tool with `siqc` command for generating reports
 * Progressive loading with Web Workers for instant UI rendering
 * Optimized spatial heatmap component with per-sample binning
 

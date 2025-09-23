@@ -1,4 +1,4 @@
-# `siqc`: Standalone Interactive Quality Control Report Generator
+# `siqc`: Generate standalone interactive QC reports from scientific data
 
 Generate interactive QC reports from scientific data with progressive loading and spatial visualization. Perfect for single-cell genomics, spatial transcriptomics, and other large-scale biological datasets.
 
@@ -18,18 +18,18 @@ Generate interactive QC reports from scientific data with progressive loading an
 
 ```bash
 # Install globally from git repository
-npm install -g git+https://github.com/openpipelines-bio/qc_report_generator.git
+npm install -g git+https://github.com/openpipelines-bio/siqc.git
 # or
-pnpm install -g git+https://github.com/openpipelines-bio/qc_report_generator.git
+pnpm install -g git+https://github.com/openpipelines-bio/siqc.git
 ```
 
 ### Local Development
 
 ```bash
-git clone https://github.com/openpipelines-bio/qc_report_generator.git
-cd qc_report_generator
+git clone https://github.com/openpipelines-bio/siqc.git
+cd siqc
 pnpm install
-# In the following sections, CLI is now available via `pnpm cli`, not `qc-report`
+# In the following sections, CLI is now available via `pnpm cli`, not `siqc`
 ```
 
 ## Quick Start
@@ -38,17 +38,17 @@ pnpm install
 
 ```bash
 # Generate single-cell test data
-qc-report generate-test-data --type sc --output ./example-data
+siqc generate-test-data --type sc --output ./example-data
 
 # Generate spatial test data  
-qc-report generate-test-data --type xenium --output ./spatial-data
+siqc generate-test-data --type xenium --output ./spatial-data
 ```
 
 ### 2. Create Your First Report
 
 ```bash
 # Render report from test data
-qc-report render --data ./example-data/data.json --structure ./example-data/structure.json --output ./my-report.html
+siqc render --data ./example-data/data.json --structure ./example-data/structure.json --output ./my-report.html
 
 # Open the report in your browser
 open my-report.html
@@ -59,7 +59,7 @@ open my-report.html
 Prepare your data in the required format (see [Data Format](#data-format)) and render:
 
 ```bash
-qc-report render --data ./my-qc-data/data.json --structure ./my-qc-data/structure.json --output ./my-qc-report.html
+siqc render --data ./my-qc-data/data.json --structure ./my-qc-data/structure.json --output ./my-qc-report.html
 ```
 
 ## CLI Reference
@@ -70,7 +70,7 @@ qc-report render --data ./my-qc-data/data.json --structure ./my-qc-data/structur
 Generate example datasets for testing and development.
 
 ```bash
-qc-report generate-test-data --type <type> --output <directory>
+siqc generate-test-data --type <type> --output <directory>
 ```
 
 **Options:**
@@ -80,15 +80,15 @@ qc-report generate-test-data --type <type> --output <directory>
 
 **Examples:**
 ```bash
-qc-report generate-test-data --type sc --output ./test-data
-qc-report generate-test-data --type xenium_large --output ./large-spatial --verbose
+siqc generate-test-data --type sc --output ./test-data
+siqc generate-test-data --type xenium_large --output ./large-spatial --verbose
 ```
 
 #### `render`
 Generate QC report from existing data.
 
 ```bash
-qc-report render --data <file> --structure <file> --output <file> [options]
+siqc render --data <file> --structure <file> --output <file> [options]
 ```
 
 **Options:**
@@ -101,15 +101,15 @@ qc-report render --data <file> --structure <file> --output <file> [options]
 
 **Examples:**
 ```bash
-qc-report render --data ./data.json --structure ./structure.json --output ./report.html
-qc-report render --data ./data.json --structure ./structure.json --output ./report.html --payload ./cached-payload.bin
+siqc render --data ./data.json --structure ./structure.json --output ./report.html
+siqc render --data ./data.json --structure ./structure.json --output ./report.html --payload ./cached-payload.bin
 ```
 
 #### `compress`
 Compress data to binary payload format for faster loading.
 
 ```bash
-qc-report compress --data <file> --structure <file> --output <file>
+siqc compress --data <file> --structure <file> --output <file>
 ```
 
 **Options:**
@@ -120,7 +120,7 @@ qc-report compress --data <file> --structure <file> --output <file>
 
 **Examples:**
 ```bash
-qc-report compress --data data.json --structure structure.json --output payload.bin
+siqc compress --data data.json --structure structure.json --output payload.bin
 ```
 
 ## Data Format

@@ -46,15 +46,18 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Install CLI tool globally
+        run: pnpm install -g .
+
       - name: Prepare output directory
         run: mkdir -p output
 
       - name: Generate test data for ${{ matrix.dataset.name }}
-        run: pnpm run generate-test-data --type ${{ matrix.dataset.type }} --output ${{ matrix.dataset.path }}
+        run: siqc generate-test-data --type ${{ matrix.dataset.type }} --output ${{ matrix.dataset.path }}
 
       - name: Build ${{ matrix.dataset.name }} report using CLI
         run: |
-          pnpm run render \
+          siqc render \
             --data ${{ matrix.dataset.path }}/data.json \
             --structure ${{ matrix.dataset.path }}/structure.json \
             --output output/${{ matrix.dataset.output }}

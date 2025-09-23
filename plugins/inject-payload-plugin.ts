@@ -74,7 +74,7 @@ export function injectPayloadPlugin(options: PayloadPluginOptions = {}): Plugin 
               console.error('   Set QC_PAYLOAD_PATH environment variable to point to an existing payload file');
             }
           }
-          console.error('\n💡 Try: qc-report --help');
+          console.error('\n💡 Try: siqc --help');
           throw new Error('Missing required data files for payload generation');
         }
 

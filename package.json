@@ -1,10 +1,10 @@
 {
   "name": "siqc",
   "version": "0.2.0",
-  "description": "Standalone Interactive Quality Control (siqc) report generator",
+  "description": "Generate standalone interactive QC reports from scientific data",
   "type": "module",
   "bin": {
-    "qc-report": "./cli.js"
+    "siqc": "./cli.js"
   },
   "files": [
     "cli.js",
@@ -45,13 +45,13 @@
     "cli"
   ],
   "author": "OpenPipelines Bio",
-  "homepage": "https://github.com/openpipelines-bio/qc_report_generator",
+  "homepage": "https://github.com/openpipelines-bio/siqc",
   "repository": {
     "type": "git",
-    "url": "https://github.com/openpipelines-bio/qc_report_generator.git"
+    "url": "https://github.com/openpipelines-bio/siqc.git"
   },
   "bugs": {
-    "url": "https://github.com/openpipelines-bio/qc_report_generator/issues"
+    "url": "https://github.com/openpipelines-bio/siqc/issues"
   },
   "engines": {
     "node": ">=18.0.0"

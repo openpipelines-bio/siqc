@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * QC Report Generator CLI - Yargs Implementation
+ * SIQC Report Generator CLI - Yargs Implementation
  * 
  * A modern command-line tool for generating interactive QC reports from scientific data.
  * Features progressive loading, spatial visualization, and standalone HTML output.
@@ -20,8 +20,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const cli = yargs(hideBin(process.argv))
-  .scriptName('qc-report')
-  .usage('🧬 Generate interactive QC reports from scientific data\n\nUsage: $0 <command> [options]')
+  .scriptName('siqc')
+  .usage('🧬 Generate standalone interactive QC reports from scientific data\n\nUsage: $0 <command> [options]')
   .version('0.1.0')
   .help('help')
   .alias('h', 'help')
@@ -317,7 +317,7 @@ async function generateTestData(options) {
     console.log(`   Structure: ${structurePath}`);
     console.log('');
     console.log('🚀 Next steps:');
-    console.log(`   qc-report render --data ${dataPath} --structure ${structurePath} --output ./report.html`);
+    console.log(`   siqc render --data ${dataPath} --structure ${structurePath} --output ./report.html`);
     
   } catch (error) {
     throw new Error(`Failed to generate ${type} dataset: ${error.message}`);
