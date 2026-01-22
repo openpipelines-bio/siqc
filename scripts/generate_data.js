@@ -717,11 +717,261 @@ function generateXeniumStructure() {
   };
 }
 
+function generateCosmxDataset({
+  numSamples = 2,
+  cellsPerSample = 10,
+  totalCountsRange = [16, 78],
+  nonzeroVarsRange = [1, 2],
+  mitoFractionMean = 0.07,
+  mitoFractionSd = 0.04,
+  riboFractionMean = 0.10,
+  riboFractionSd = 0.05
+} = {}) {
+  const rng = new Random(321);
+  const totalCells = numSamples * cellsPerSample;
+
+  // Re-use spatial coordinate generation from Xenium
+  // Helper function for spatial coordinates
+  function generateSpatialCoordinates(sampleIdx, cellsPerSample) {
+    // Generate clusters for this sample
+    const numClusters = Math.floor(rng.uniform(3, 8));
+    const clusters = Array.from({ length: numClusters }, () => ({
+      centerX: rng.uniform(0, 1000),
+      centerY: rng.uniform(0, 1000),
+      stdX: rng.uniform(50, 150),
+      stdY: rng.uniform(50, 150),
+      correlation: rng.uniform(-0.8, 0.8),
+      weight: rng.uniform(0.5, 1.5)
+    }));
+
+    // Pre-calculate correlation factors
+    clusters.forEach(c => {
+      c.corrSqrt = Math.sqrt(1 - c.correlation ** 2);
+    });
+    
+    // Normalize weights
+    const totalWeight = clusters.reduce((sum, c) => sum + c.weight, 0);
+    clusters.forEach(c => c.normalizedWeight = c.weight / totalWeight);
+
+    // Create CDF for cluster selection
+    const cdf = [];
+    let cumulative = 0;
+    for (const cluster of clusters) {
+      cumulative += cluster.normalizedWeight;
+      cdf.push(cumulative);
+    }
+
+    const coords = [];
+    
+    // Batch generation of normal variables
+    const BATCH_SIZE = 1000;
+    let normalBatch = new Float32Array(BATCH_SIZE);
+    let batchIndex = BATCH_SIZE;
+
+    // Function to generate batch of normal variates
+    const generateNormalBatch = () => {
+      for (let i = 0; i < BATCH_SIZE; i += 2) {
+        const u1 = Math.max(1e-6, rng.random()); // Avoid log(0)
+        const u2 = rng.random();
+        const mag = Math.sqrt(-2 * Math.log(u1));
+        normalBatch[i] = mag * Math.cos(2 * Math.PI * u2);
+        normalBatch[i+1] = mag * Math.sin(2 * Math.PI * u2);
+      }
+      batchIndex = 0;
+    };
+
+    for (let j = 0; j < cellsPerSample; j++) {
+      // Refresh batch if needed
+      if (batchIndex >= BATCH_SIZE) {
+        generateNormalBatch();
+      }
+
+      // Select cluster
+      const p = rng.random();
+      const clusterIdx = cdf.findIndex(v => p <= v);
+      const selectedCluster = clusters[clusterIdx !== -1 ? clusterIdx : clusters.length - 1];
+      
+      // Get normal variates from batch
+      const z1 = normalBatch[batchIndex++];
+      const z2 = normalBatch[batchIndex++];
+      
+      // Apply correlation and scaling using pre-computed values
+      const x = selectedCluster.centerX + selectedCluster.stdX * z1;
+      const y = selectedCluster.centerY + 
+                selectedCluster.stdY * (selectedCluster.correlation * z1 + selectedCluster.corrSqrt * z2);
+      
+      coords.push({ x, y });
+    }
+    
+    return coords;
+  }
+
+  // Generate all spatial coordinates first
+  const allCoords = [];
+  for (let i = 0; i < numSamples; i++) {
+    const sampleCoords = generateSpatialCoordinates(i, cellsPerSample);
+    for (let j = 0; j < sampleCoords.length; j++) {
+      allCoords.push(sampleCoords[j]);
+    }
+  }
+
+  // Initialize accumulators
+  const cellRnaStats = {
+    sample_id: [],
+    total_counts: [],
+    num_nonzero_vars: [],
+    fraction_mitochondrial: [],
+    fraction_ribosomal: [],
+    Area: [],
+    AspectRatio: [],
+    "Mean.DAPI": [], "Max.DAPI": [],
+    "Mean.MembraneStain": [], "Max.MembraneStain": [],
+    "Mean.PanCK": [], "Max.PanCK": [],
+    "Mean.CD45": [], "Max.CD45": [],
+    "Mean.CD3": [], "Max.CD3": [],
+    x_coord: [],
+    y_coord: [],
+    fov: []
+  };
+
+  const sampleIds = Array.from({ length: numSamples }, (_, i) => `sample_${i + 1}`);
+
+  for (let sampleIdx = 0; sampleIdx < numSamples; sampleIdx++) {
+    const sampleRng = new Random(321 + sampleIdx * 150);
+    const sampleBaseX = sampleIdx * 2000; // Offset samples spatially
+    const sampleCoords = allCoords.slice(sampleIdx * cellsPerSample, (sampleIdx + 1) * cellsPerSample);
+
+    for (let cellIdx = 0; cellIdx < cellsPerSample; cellIdx++) {
+      const coord = sampleCoords[cellIdx];
+      
+      // Basic metrics
+      cellRnaStats.sample_id.push(sampleIds[sampleIdx]);
+      cellRnaStats.total_counts.push(sampleRng.randint(totalCountsRange[0], totalCountsRange[1]));
+      cellRnaStats.num_nonzero_vars.push(sampleRng.randint(nonzeroVarsRange[0], nonzeroVarsRange[1]));
+      
+      // Fractions
+      cellRnaStats.fraction_mitochondrial.push(
+        Math.max(0, Math.min(1, sampleRng.normal(mitoFractionMean, mitoFractionSd)))
+      );
+      cellRnaStats.fraction_ribosomal.push(
+        Math.max(0, Math.min(1, sampleRng.normal(riboFractionMean, riboFractionSd)))
+      );
+
+      // Morphology
+      cellRnaStats.Area.push(sampleRng.uniform(500, 2500));
+      cellRnaStats.AspectRatio.push(sampleRng.uniform(1.0, 3.0));
+
+      // Immunofluorescence stains (Mean/Max)
+      // DAPI (Nucleus) - usually high
+      cellRnaStats["Mean.DAPI"].push(sampleRng.normal(1500, 300));
+      cellRnaStats["Max.DAPI"].push(sampleRng.normal(3000, 500)); // Max > Mean
+
+      // MembraneStain - variable
+      cellRnaStats["Mean.MembraneStain"].push(sampleRng.normal(800, 200));
+      cellRnaStats["Max.MembraneStain"].push(sampleRng.normal(2000, 400));
+
+      // Markers (PanCK, CD45, CD3) - sparse expression
+      // PanCK (Epithelial)
+      const isPanCK = sampleRng.random() < 0.3;
+      cellRnaStats["Mean.PanCK"].push(isPanCK ? sampleRng.normal(1000, 200) : sampleRng.normal(100, 20));
+      cellRnaStats["Max.PanCK"].push(isPanCK ? sampleRng.normal(2500, 400) : sampleRng.normal(300, 50));
+
+      // CD45 (Immune)
+      const isCD45 = !isPanCK && sampleRng.random() < 0.3;
+      cellRnaStats["Mean.CD45"].push(isCD45 ? sampleRng.normal(1200, 250) : sampleRng.normal(100, 20));
+      cellRnaStats["Max.CD45"].push(isCD45 ? sampleRng.normal(3000, 500) : sampleRng.normal(300, 50));
+
+      // CD3 (T-cell) - subset of CD45
+      const isCD3 = isCD45 && sampleRng.random() < 0.6;
+      cellRnaStats["Mean.CD3"].push(isCD3 ? sampleRng.normal(1000, 200) : sampleRng.normal(80, 20));
+      cellRnaStats["Max.CD3"].push(isCD3 ? sampleRng.normal(2500, 400) : sampleRng.normal(200, 50));
+
+      // Spatial coords
+      cellRnaStats.x_coord.push(coord.x);
+      cellRnaStats.y_coord.push(coord.y);
+
+      // Field of View (FOV) - simplified grid assignment
+      const fovX = Math.floor(coord.x / 500);
+      const fovY = Math.floor(coord.y / 500);
+      cellRnaStats.fov.push(fovY * 10 + fovX + 1); // e.g., 1, 2, 11, 12...
+    }
+  }
+
+  // Generate sample summary stats (similar to Xenium/SC)
+  const sampleSummaryStats = {
+    sample_id: sampleIds,
+    rna_num_barcodes: Array.from({ length: numSamples }, () => cellsPerSample * 2), // Mock
+    rna_num_barcodes_filtered: Array.from({ length: numSamples }, () => cellsPerSample),
+    rna_sum_total_counts: sampleIds.map(id =>
+      getSampleStat(cellRnaStats.total_counts, id, arr => arr.reduce((a, b) => a + b, 0), cellRnaStats.sample_id)
+    ),
+    rna_median_total_counts: sampleIds.map(id =>
+      getSampleStat(cellRnaStats.total_counts, id, arr => {
+        const sorted = [...arr].sort((a, b) => a - b);
+        return sorted[Math.floor(sorted.length / 2)];
+      }, cellRnaStats.sample_id)
+    ),
+    rna_overall_num_nonzero_vars: Array.from({ length: numSamples }, () => 
+      Math.max(...nonzeroVarsRange) * 10
+    ),
+    rna_median_num_nonzero_vars: sampleIds.map(id =>
+      getSampleStat(cellRnaStats.num_nonzero_vars, id, arr => {
+        const sorted = [...arr].sort((a, b) => a - b);
+        return sorted[Math.floor(sorted.length / 2)];
+      }, cellRnaStats.sample_id)
+    ),
+  };
+
+  return {
+    cell_rna_stats: transformDataFrame(cellRnaStats),
+    sample_summary_stats: transformDataFrame(sampleSummaryStats)
+  };
+}
+
+function generateCosmxStructure() {
+  const colnames = [
+    'total_counts', 'num_nonzero_vars', 'fraction_mitochondrial',
+    'fraction_ribosomal', 'Area', 'AspectRatio',
+    'Mean.DAPI', 'Mean.MembraneStain', 'Mean.PanCK', 'Mean.CD45'
+  ];
+
+  return {
+    categories: [
+      {
+        name: 'Sample QC',
+        key: 'sample_summary_stats',
+        additionalAxes: false,
+        defaultFilters: []
+      },
+      {
+        name: 'Cell RNA QC',
+        key: 'cell_rna_stats',
+        additionalAxes: true,
+        defaultFilters: colnames.map(col => ({
+          type: 'histogram',
+          visualizationType: 'histogram',
+          field: col,
+          label: col.replace(/_/g, ' ').replace(/\./g, ' '),
+          description: `Description for ${col}`,
+          cutoffMin: null,
+          cutoffMax: null,
+          zoomMax: null,
+          nBins: 50,
+          groupBy: 'sample_id',
+          yAxisType: 'linear'
+        }))
+      }
+    ]
+  };
+}
+
 export {
   generateScDataset,
   generateXeniumDataset,
+  generateCosmxDataset,
   generateScStructure,
   generateXeniumStructure,
+  generateCosmxStructure,
   transformDataFrame,
   Random
 };
