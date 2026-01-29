@@ -85,7 +85,7 @@ siqc generate-test-data --type <type> --output <directory>
 ```
 
 **Options:**
-- `--type, -t`: Dataset type (`sc`, `sc_large`, `xenium`, `xenium_large`, `cosmx`, `cosmx_large`)
+- `--type, -t`: Dataset type (`sc`, `sc_large`, `xenium`, `xenium_large`, `cosmx`, `cosmx_large`, `visium`, `visium_large`)
 - `--output, -o`: Output directory for generated files
 - `--verbose`: Enable verbose logging
 
@@ -93,6 +93,7 @@ siqc generate-test-data --type <type> --output <directory>
 ```bash
 siqc generate-test-data --type sc --output ./test-data
 siqc generate-test-data --type cosmx --output ./cosmx-data
+siqc generate-test-data --type visium --output ./visium-data
 siqc generate-test-data --type xenium_large --output ./large-spatial --verbose
 ```
 

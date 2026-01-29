@@ -36,6 +36,14 @@ jobs:
             type: cosmx_large
             path: resources_test/cosmx_dataset_large
             output: cosmx-large-report.html
+          - name: visium
+            type: visium
+            path: resources_test/visium_dataset
+            output: visium-report.html
+          - name: visium-large
+            type: visium_large
+            path: resources_test/visium_dataset_large
+            output: visium-large-report.html
       fail-fast: false
     steps:
       - name: Checkout code

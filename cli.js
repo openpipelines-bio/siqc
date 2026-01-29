@@ -41,7 +41,7 @@ cli.command({
         alias: 't',
         describe: 'Dataset type to generate',
         type: 'string',
-        choices: ['sc', 'sc_large', 'xenium', 'xenium_large', 'cosmx', 'cosmx_large'],
+        choices: ['sc', 'sc_large', 'xenium', 'xenium_large', 'cosmx', 'cosmx_large', 'visium', 'visium_large'],
         demandOption: true
       })
       .option('output', {
@@ -245,7 +245,7 @@ async function generateTestData(options) {
 
   try {
     // Import and use the data generator
-    const { generateScDataset, generateXeniumDataset, generateCosmxDataset, generateScStructure, generateXeniumStructure, generateCosmxStructure } = 
+    const { generateScDataset, generateXeniumDataset, generateCosmxDataset, generateVisiumDataset, generateScStructure, generateXeniumStructure, generateCosmxStructure, generateVisiumStructure } = 
       await import('./scripts/generate_data.js');
 
     const generators = {
@@ -314,6 +314,21 @@ async function generateTestData(options) {
           riboFractionSd: 0.04
         }),
         structureFun: generateCosmxStructure
+      },
+      visium: {
+        label: 'Visium dataset',
+        dataFun: generateVisiumDataset,
+        structureFun: generateVisiumStructure
+      },
+      visium_large: {
+        label: 'Large-scale Visium dataset',
+        dataFun: () => generateVisiumDataset({
+          numSamples: 6,
+          cellsPerSample: 15000, // Typically fewer spots max out around 5k-10k depending on chip
+          totalCountsRange: [500, 20000],
+          nonzeroVarsRange: [200, 4000]
+        }),
+        structureFun: generateVisiumStructure
       }
     };
 
