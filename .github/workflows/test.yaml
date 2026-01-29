@@ -74,7 +74,7 @@ jobs:
             --output output/${{ matrix.dataset.output }}
 
       - name: Upload ${{ matrix.dataset.name }} report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.dataset.name }}-report
           path: output/${{ matrix.dataset.output }}
