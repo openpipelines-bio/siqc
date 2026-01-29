@@ -969,13 +969,181 @@ function generateCosmxStructure() {
   };
 }
 
+function generateVisiumStructure() {
+  const colnames = [
+    'total_counts', 'num_nonzero_vars', 'fraction_mitochondrial',
+    'fraction_ribosomal'
+  ];
+
+  return {
+    categories: [
+      {
+        name: 'Sample QC',
+        key: 'sample_summary_stats',
+        additionalAxes: false,
+        defaultFilters: []
+      },
+      {
+        name: 'Cell RNA QC',
+        key: 'cell_rna_stats',
+        additionalAxes: true,
+        defaultFilters: colnames.map(col => ({
+          type: 'histogram',
+          visualizationType: 'histogram',
+          field: col,
+          label: col.replace(/_/g, ' '),
+          description: `Description for ${col}`,
+          cutoffMin: null,
+          cutoffMax: null,
+          zoomMax: null,
+          nBins: 50,
+          groupBy: 'sample_id',
+          yAxisType: 'linear'
+        }))
+      }
+    ]
+  };
+}
+
+function generateVisiumDataset({
+  numSamples = 2,
+  cellsPerSample = 5000, // Visium spots are fewer than cells usually
+  totalCountsRange = [500, 20000],
+  nonzeroVarsRange = [200, 4000],
+  mitoFractionMean = 0.05,
+  mitoFractionSd = 0.02,
+  riboFractionMean = 0.1,
+  riboFractionSd = 0.03
+} = {}) {
+  const rng = new Random(421);
+  const totalCells = numSamples * cellsPerSample;
+
+  function generateVisiumCoordinates(sampleIdx, cellsPerSample) {
+    // Visium spots are arranged in a hexagonal grid
+    const coords = [];
+    const side = Math.ceil(Math.sqrt(cellsPerSample));
+    const spacing = 100; // microns
+
+    let count = 0;
+    for (let r = 0; r < side * 1.5; r++) {
+      for (let c = 0; c < side * 1.5; c++) {
+        if (count >= cellsPerSample) break;
+        
+        // Hex grid offset
+        const xOffset = (r % 2) * (spacing / 2);
+        const x = c * spacing + xOffset;
+        const y = r * spacing * 0.866; // sqrt(3)/2
+
+        // Add some noise to make it less perfect or simulate tissue coverage
+        // Only keep if within a "tissue" circle
+        const centerX = (side * spacing) / 2;
+        const centerY = (side * spacing * 0.866) / 2;
+        const radius = (side * spacing) * 0.45;
+        
+        const dist = Math.sqrt((x - centerX)**2 + (y - centerY)**2);
+        
+        if (dist < radius || rng.random() < 0.1) { // 10% background spots
+           coords.push({ x, y });
+           count++;
+        }
+      }
+      if (count >= cellsPerSample) break;
+    }
+    // Fill remaining if circle crop removed too many
+    while (count < cellsPerSample) {
+       coords.push({ 
+         x: rng.uniform(0, side * spacing), 
+         y: rng.uniform(0, side * spacing) 
+       });
+       count++;
+    }
+    
+    return coords;
+  }
+
+  // Generate all spatial coordinates
+  const allCoords = [];
+  for (let i = 0; i < numSamples; i++) {
+    const sampleCoords = generateVisiumCoordinates(i, cellsPerSample);
+    for (let j = 0; j < sampleCoords.length; j++) {
+      allCoords.push(sampleCoords[j]);
+    }
+  }
+
+  const cellRnaStats = {
+    sample_id: [],
+    total_counts: [],
+    num_nonzero_vars: [],
+    fraction_mitochondrial: [],
+    fraction_ribosomal: [],
+    x_coord: [],
+    y_coord: []
+  };
+
+  const sampleIds = Array.from({ length: numSamples }, (_, i) => `sample_${i + 1}`);
+
+  for (let sampleIdx = 0; sampleIdx < numSamples; sampleIdx++) {
+    const sampleRng = new Random(421 + sampleIdx * 150);
+    const sampleCoords = allCoords.slice(sampleIdx * cellsPerSample, (sampleIdx + 1) * cellsPerSample);
+
+    for (let cellIdx = 0; cellIdx < cellsPerSample; cellIdx++) {
+      const coord = sampleCoords[cellIdx];
+      
+      cellRnaStats.sample_id.push(sampleIds[sampleIdx]);
+      cellRnaStats.total_counts.push(sampleRng.randint(totalCountsRange[0], totalCountsRange[1]));
+      cellRnaStats.num_nonzero_vars.push(sampleRng.randint(nonzeroVarsRange[0], nonzeroVarsRange[1]));
+      
+      cellRnaStats.fraction_mitochondrial.push(
+        Math.max(0, Math.min(1, sampleRng.normal(mitoFractionMean, mitoFractionSd)))
+      );
+      cellRnaStats.fraction_ribosomal.push(
+        Math.max(0, Math.min(1, sampleRng.normal(riboFractionMean, riboFractionSd)))
+      );
+
+      cellRnaStats.x_coord.push(coord.x);
+      cellRnaStats.y_coord.push(coord.y);
+    }
+  }
+
+  const sampleSummaryStats = {
+    sample_id: sampleIds,
+    rna_num_barcodes: Array.from({ length: numSamples }, () => cellsPerSample), 
+    rna_num_barcodes_filtered: Array.from({ length: numSamples }, () => cellsPerSample),
+    rna_sum_total_counts: sampleIds.map(id =>
+      getSampleStat(cellRnaStats.total_counts, id, arr => arr.reduce((a, b) => a + b, 0), cellRnaStats.sample_id)
+    ),
+    rna_median_total_counts: sampleIds.map(id =>
+      getSampleStat(cellRnaStats.total_counts, id, arr => {
+        const sorted = [...arr].sort((a, b) => a - b);
+        return sorted[Math.floor(sorted.length / 2)];
+      }, cellRnaStats.sample_id)
+    ),
+    rna_overall_num_nonzero_vars: Array.from({ length: numSamples }, () => 
+      Math.max(...nonzeroVarsRange) * 10
+    ),
+    rna_median_num_nonzero_vars: sampleIds.map(id =>
+      getSampleStat(cellRnaStats.num_nonzero_vars, id, arr => {
+        const sorted = [...arr].sort((a, b) => a - b);
+        return sorted[Math.floor(sorted.length / 2)];
+      }, cellRnaStats.sample_id)
+    ),
+  };
+
+  return {
+    cell_rna_stats: transformDataFrame(cellRnaStats),
+    sample_summary_stats: transformDataFrame(sampleSummaryStats)
+  };
+}
+
 export {
   generateScDataset,
   generateXeniumDataset,
   generateCosmxDataset,
+  generateVisiumDataset,
   generateScStructure,
   generateXeniumStructure,
   generateCosmxStructure,
+  generateVisiumStructure,
   transformDataFrame,
   Random
 };

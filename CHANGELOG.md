@@ -1,3 +1,11 @@
+# siqc x.x.x
+
+## New Functionality
+* Added support for CosMx and Visium datasets in test data generation (PR #26, #27)
+
+## Breaking changes
+* Removed pnpm package manager configuration in favor of npm (PR #26)
+
 # siqc 0.2.0
 
 Major refactor of the siqc package (PR #21).
