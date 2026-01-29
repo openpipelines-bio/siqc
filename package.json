@@ -1,6 +1,6 @@
 {
   "name": "siqc",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Generate standalone interactive QC reports from scientific data",
   "type": "module",
   "bin": {
