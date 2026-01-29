@@ -28,6 +28,14 @@ jobs:
             type: xenium_large
             path: resources_test/xenium_dataset_large
             output: spatial-large-report.html
+          - name: cosmx
+            type: cosmx
+            path: resources_test/cosmx_dataset
+            output: cosmx-report.html
+          - name: cosmx-large
+            type: cosmx_large
+            path: resources_test/cosmx_dataset_large
+            output: cosmx-large-report.html
       fail-fast: false
     steps:
       - name: Checkout code

@@ -41,7 +41,7 @@ cli.command({
         alias: 't',
         describe: 'Dataset type to generate',
         type: 'string',
-        choices: ['sc', 'sc_large', 'xenium', 'xenium_large'],
+        choices: ['sc', 'sc_large', 'xenium', 'xenium_large', 'cosmx', 'cosmx_large'],
         demandOption: true
       })
       .option('output', {
@@ -245,7 +245,7 @@ async function generateTestData(options) {
 
   try {
     // Import and use the data generator
-    const { generateScDataset, generateXeniumDataset, generateScStructure, generateXeniumStructure } = 
+    const { generateScDataset, generateXeniumDataset, generateCosmxDataset, generateScStructure, generateXeniumStructure, generateCosmxStructure } = 
       await import('./scripts/generate_data.js');
 
     const generators = {
@@ -295,6 +295,25 @@ async function generateTestData(options) {
           riboFractionSd: 0.04
         }),
         structureFun: generateXeniumStructure
+      },
+      cosmx: {
+        label: 'CosMX dataset',
+        dataFun: generateCosmxDataset,
+        structureFun: generateCosmxStructure
+      },
+      cosmx_large: {
+        label: 'Large-scale CosMX dataset',
+        dataFun: () => generateCosmxDataset({
+          numSamples: 8,
+          cellsPerSample: 100000,
+          totalCountsRange: [50, 800],
+          nonzeroVarsRange: [20, 150],
+          mitoFractionMean: 0.06,
+          mitoFractionSd: 0.025,
+          riboFractionMean: 0.18,
+          riboFractionSd: 0.04
+        }),
+        structureFun: generateCosmxStructure
       }
     };
 

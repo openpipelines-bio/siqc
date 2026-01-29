@@ -87,5 +87,8 @@
     "tailwindcss-animate": "^1.0.7",
     "yargs": "^18.0.0"
   },
-  "packageManager": "pnpm@10.9.0"
+  "overrides": {
+    "seroval": ">=1.4.1"
+  },
+  "packageManager": "npm@10.9.3"
 }
