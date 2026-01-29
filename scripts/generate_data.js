@@ -862,7 +862,7 @@ function generateCosmxDataset({
       cellRnaStats.AspectRatio.push(sampleRng.uniform(1.0, 3.0));
 
       // Immunofluorescence stains (Mean/Max)
-      // DAPI (Nucleus) - usually high
+      // DAPI
       cellRnaStats["Mean.DAPI"].push(sampleRng.normal(1500, 300));
       cellRnaStats["Max.DAPI"].push(sampleRng.normal(3000, 500)); // Max > Mean
 
@@ -871,17 +871,17 @@ function generateCosmxDataset({
       cellRnaStats["Max.MembraneStain"].push(sampleRng.normal(2000, 400));
 
       // Markers (PanCK, CD45, CD3) - sparse expression
-      // PanCK (Epithelial)
+      // PanCK
       const isPanCK = sampleRng.random() < 0.3;
       cellRnaStats["Mean.PanCK"].push(isPanCK ? sampleRng.normal(1000, 200) : sampleRng.normal(100, 20));
       cellRnaStats["Max.PanCK"].push(isPanCK ? sampleRng.normal(2500, 400) : sampleRng.normal(300, 50));
 
-      // CD45 (Immune)
+      // CD45
       const isCD45 = !isPanCK && sampleRng.random() < 0.3;
       cellRnaStats["Mean.CD45"].push(isCD45 ? sampleRng.normal(1200, 250) : sampleRng.normal(100, 20));
       cellRnaStats["Max.CD45"].push(isCD45 ? sampleRng.normal(3000, 500) : sampleRng.normal(300, 50));
 
-      // CD3 (T-cell) - subset of CD45
+      // CD3
       const isCD3 = isCD45 && sampleRng.random() < 0.6;
       cellRnaStats["Mean.CD3"].push(isCD3 ? sampleRng.normal(1000, 200) : sampleRng.normal(80, 20));
       cellRnaStats["Max.CD3"].push(isCD3 ? sampleRng.normal(2500, 400) : sampleRng.normal(200, 50));
@@ -932,7 +932,11 @@ function generateCosmxStructure() {
   const colnames = [
     'total_counts', 'num_nonzero_vars', 'fraction_mitochondrial',
     'fraction_ribosomal', 'Area', 'AspectRatio',
-    'Mean.DAPI', 'Mean.MembraneStain', 'Mean.PanCK', 'Mean.CD45'
+    'Mean.DAPI', 'Max.DAPI',
+    'Mean.MembraneStain', 'Max.MembraneStain',
+    'Mean.PanCK', 'Max.PanCK',
+    'Mean.CD45', 'Max.CD45',
+    'Mean.CD3', 'Max.CD3'
   ];
 
   return {

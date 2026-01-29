@@ -89,5 +89,6 @@
   },
   "overrides": {
     "seroval": ">=1.4.1"
-  }
+  },
+  "packageManager": "npm@10.9.3"
 }

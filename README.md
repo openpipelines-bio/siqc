@@ -85,7 +85,7 @@ siqc generate-test-data --type <type> --output <directory>
 ```
 
 **Options:**
-- `--type, -t`: Dataset type (`sc`, `sc_large`, `xenium`, `xenium_large`, `cosmx`)
+- `--type, -t`: Dataset type (`sc`, `sc_large`, `xenium`, `xenium_large`, `cosmx`, `cosmx_large`)
 - `--output, -o`: Output directory for generated files
 - `--verbose`: Enable verbose logging
 
