@@ -1,3 +1,9 @@
+# siqc 0.3.0 (unreleased)
+
+## Breaking Changes
+
+* Added optional `description` field to the categories in the `structure.json`. This was previously hardcoded depending on the category key, but now no description will be rendered if this isn't specified.
+
 # siqc 0.2.1
 
 Added support for CosMX and Visium technologies.

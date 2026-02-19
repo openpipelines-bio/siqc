@@ -296,31 +296,11 @@ const App: Component = () => {
               <H2>{category.name}</H2>
               
               {/* Add descriptive text based on category */}
-              {/* TODO: move descriptive text into the report structure itself */}
-              <div class="mb-4 text-gray-700">
-                {category.key === "sample_summary_stats" && (
-                  <p>
-                    These metrics provide sample-level quality control measures. Each plot represents data 
-                    aggregated at the sample level and is always grouped by sample ID.
-                  </p>
-                )}
-                
-                {category.key === "metrics_cellranger_stats" && (
-                  <p>
-                    These metrics are provided by CellRanger and show sample-level sequencing statistics. 
-                    All CellRanger metrics are always grouped by sample ID regardless of global visualization settings.
-                  </p>
-                )}
-                
-                {category.key === "cell_rna_stats" && (
-                  <p>
-                    These metrics provide cell-level quality control measures. You can use the Global Visualization 
-                    Settings above to group these metrics by different categorical variables (e.g., sample_id, 
-                    predicted cell type). These groupings allow you to identify quality differences across 
-                    biological or technical groups.
-                  </p>
-                )}
-              </div>
+              <Show when={category.description}>
+                <div class="mb-4 text-gray-700">
+                  <p>{category.description}</p>
+                </div>
+              </Show>
               
               <div class="grid grid-cols-1 gap-4">
                 <For each={settings[category.key]}>
