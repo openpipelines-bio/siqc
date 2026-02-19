@@ -2,7 +2,11 @@
 
 ## Breaking Changes
 
-* Added optional `description` field to the categories in the `structure.json`. This was previously hardcoded depending on the category key, but now no description will be rendered if this isn't specified.
+* Added optional `description` field to the categories in the `structure.json` (PR #29). This was previously hardcoded depending on the category key, but now no description will be rendered if this isn't specified.
+
+## Minor changes
+
+* Updated GitHub Action versions to latest (PR #30).
 
 # siqc 0.2.1
 

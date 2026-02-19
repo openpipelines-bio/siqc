@@ -47,10 +47,10 @@ jobs:
       fail-fast: false
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           cache: 'npm'
 
@@ -74,7 +74,7 @@ jobs:
             --output output/${{ matrix.dataset.output }}
 
       - name: Upload ${{ matrix.dataset.name }} report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ matrix.dataset.name }}-report
           path: output/${{ matrix.dataset.output }}
