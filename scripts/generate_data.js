@@ -641,13 +641,8 @@ function generateScStructure() {
     categories: [
       {
         name: 'Sample QC',
-        key: 'sample_summary_stats',
-        additionalAxes: false,
-        defaultFilters: []
-      },
-      {
-        name: 'SampleQC',
         key: 'metrics_cellranger_stats',
+        description: 'Sample-level quality control metrics from CellRanger',
         additionalAxes: false,
         defaultFilters: cellrangerNames.map(name => ({
           type: 'bar',
@@ -663,6 +658,7 @@ function generateScStructure() {
       {
         name: 'Cell RNA QC',
         key: 'cell_rna_stats',
+        description: 'Cell-level quality control metrics for RNA expression',
         additionalAxes: true,
         defaultFilters: cellRnaNames.map(name => ({
           type: 'histogram',
@@ -689,16 +685,23 @@ function generateXeniumStructure() {
 
   return {
     categories: [
+      /* Note: disabled this category as long as there aren't any filters for it.
       {
         name: 'Sample QC',
         key: 'sample_summary_stats',
+        description: 'Sample-level summary statistics for Xenium dataset',
         additionalAxes: false,
         defaultFilters: []
       },
+      */
       {
         name: 'Cell RNA QC',
         key: 'cell_rna_stats',
+        description: 'Cell-level quality control metrics for RNA expression and spatial characteristics',
         additionalAxes: true,
+        embeddings: [
+          { name: 'Spatial', x: 'x_coord', y: 'y_coord' }
+        ],
         defaultFilters: colnames.map(col => ({
           type: 'histogram',
           visualizationType: 'histogram',
@@ -941,16 +944,23 @@ function generateCosmxStructure() {
 
   return {
     categories: [
+      /* Note: disabled this category as long as there aren't any filters for it.
       {
         name: 'Sample QC',
         key: 'sample_summary_stats',
+        description: 'Sample-level summary statistics for CosMx dataset',
         additionalAxes: false,
         defaultFilters: []
       },
+      */
       {
         name: 'Cell RNA QC',
         key: 'cell_rna_stats',
+        description: 'Cell-level quality control metrics for RNA expression and spatial characteristics in CosMx dataset',
         additionalAxes: true,
+        embeddings: [
+          { name: 'Spatial', x: 'x_coord', y: 'y_coord' }
+        ],
         defaultFilters: colnames.map(col => ({
           type: 'histogram',
           visualizationType: 'histogram',
@@ -987,6 +997,9 @@ function generateVisiumStructure() {
         name: 'Cell RNA QC',
         key: 'cell_rna_stats',
         additionalAxes: true,
+        embeddings: [
+          { name: 'Spatial', x: 'x_coord', y: 'y_coord' }
+        ],
         defaultFilters: colnames.map(col => ({
           type: 'histogram',
           visualizationType: 'histogram',
@@ -1135,15 +1148,130 @@ function generateVisiumDataset({
   };
 }
 
+// Integration QC dataset generator
+function generateIntegrationDataset({
+  numSamples = 4,
+  cellsPerSample = 200,
+  cellTypes = ['B_cell', 'Dendritic', 'Endothelial', 'Epithelial', 'Fibroblast', 'Macrophage', 'T_cell'],
+  metrics = ['ARI score', 'ASW Batch', 'Biological conservation', 'Graph connectivity', 'NMI score']
+} = {}) {
+  const rng = new Random(77);
+  const sampleIds = Array.from({ length: numSamples }, (_, i) => `sample_${i + 1}`);
+  const totalCells = numSamples * cellsPerSample;
+
+  // Generate UMAP coordinates: each cell type forms a cluster in UMAP space
+  // Cluster centres are arranged in a rough circle
+  const clusterCentres = cellTypes.map((_, i) => {
+    const angle = (2 * Math.PI * i) / cellTypes.length;
+    return { x: 8 * Math.cos(angle), y: 8 * Math.sin(angle) };
+  });
+
+  const cellStatsRaw = {
+    sample_id: [],
+    cell_label: [],
+    umap_x: [],
+    umap_y: []
+  };
+
+  for (let sampleIdx = 0; sampleIdx < numSamples; sampleIdx++) {
+    const sampleRng = new Random(77 + sampleIdx * 50);
+    for (let cellIdx = 0; cellIdx < cellsPerSample; cellIdx++) {
+      const cellTypeIdx = Math.floor(sampleRng.random() * cellTypes.length);
+      const centre = clusterCentres[cellTypeIdx];
+
+      cellStatsRaw.sample_id.push(sampleIds[sampleIdx]);
+      cellStatsRaw.cell_label.push(cellTypes[cellTypeIdx]);
+      cellStatsRaw.umap_x.push(centre.x + sampleRng.normal(0, 1.2));
+      cellStatsRaw.umap_y.push(centre.y + sampleRng.normal(0, 1.2));
+    }
+  }
+
+  // Generate integration metric scores (one row per metric)
+  const integrationStatsRaw = {
+    metric: metrics,
+    value: metrics.map((m, i) => {
+      const metricRng = new Random(77 + i * 13);
+      return parseFloat(metricRng.uniform(0.3, 0.95).toFixed(4));
+    })
+  };
+
+  return {
+    cell_stats: transformDataFrame(cellStatsRaw),
+    integration_stats: transformDataFrame(integrationStatsRaw)
+  };
+}
+
+function generateIntegrationStructure() {
+  return {
+    categories: [
+      {
+        name: 'Integration stats',
+        key: 'integration_stats',
+        description: 'Sample-level integration quality metrics. Higher scores generally indicate better batch integration.',
+        additionalAxes: false,
+        defaultFilters: [
+          {
+            type: 'bar',
+            field: 'value',
+            label: 'Metric scores',
+            description: 'Integration quality scores across different metrics.',
+            nBins: 10,
+            groupBy: 'metric',
+            xAxisType: 'linear',
+            yAxisType: 'linear'
+          }
+        ]
+      },
+      {
+        name: 'Cell QC',
+        key: 'cell_stats',
+        description: 'Cell-level annotations with UMAP embedding. Use the UMAP toggle on each plot to visualise distributions in embedding space.',
+        additionalAxes: true,
+        embeddings: [
+          { name: 'UMAP', x: 'umap_x', y: 'umap_y' }
+        ],
+        defaultFilters: [
+          {
+            type: 'histogram',
+            field: 'cell_label',
+            label: 'Cell label',
+            description: 'Distribution of cell type annotations.',
+            cutoffMin: null,
+            cutoffMax: null,
+            zoomMax: null,
+            nBins: 50,
+            groupBy: 'sample_id',
+            yAxisType: 'linear'
+          },
+          {
+            type: 'histogram',
+            field: 'sample_id',
+            label: 'Sample ID',
+            description: 'Distribution of cells per sample.',
+            cutoffMin: null,
+            cutoffMax: null,
+            zoomMax: null,
+            nBins: 50,
+            groupBy: 'cell_label',
+            yAxisType: 'linear'
+          }
+        ]
+      }
+    ]
+  };
+}
+
 export {
   generateScDataset,
   generateXeniumDataset,
   generateCosmxDataset,
   generateVisiumDataset,
+  generateIntegrationDataset,
   generateScStructure,
   generateXeniumStructure,
   generateCosmxStructure,
   generateVisiumStructure,
+  generateIntegrationStructure,
   transformDataFrame,
   Random
 };

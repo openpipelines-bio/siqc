@@ -41,7 +41,7 @@ cli.command({
         alias: 't',
         describe: 'Dataset type to generate',
         type: 'string',
-        choices: ['sc', 'sc_large', 'xenium', 'xenium_large', 'cosmx', 'cosmx_large', 'visium', 'visium_large'],
+        choices: ['sc', 'sc_large', 'xenium', 'xenium_large', 'cosmx', 'cosmx_large', 'visium', 'visium_large', 'integration'],
         demandOption: true
       })
       .option('output', {
@@ -245,7 +245,7 @@ async function generateTestData(options) {
 
   try {
     // Import and use the data generator
-    const { generateScDataset, generateXeniumDataset, generateCosmxDataset, generateVisiumDataset, generateScStructure, generateXeniumStructure, generateCosmxStructure, generateVisiumStructure } = 
+    const { generateScDataset, generateXeniumDataset, generateCosmxDataset, generateVisiumDataset, generateIntegrationDataset, generateScStructure, generateXeniumStructure, generateCosmxStructure, generateVisiumStructure, generateIntegrationStructure } = 
       await import('./scripts/generate_data.js');
 
     const generators = {
@@ -329,6 +329,11 @@ async function generateTestData(options) {
           nonzeroVarsRange: [200, 4000]
         }),
         structureFun: generateVisiumStructure
+      },
+      integration: {
+        label: 'Integration QC dataset',
+        dataFun: generateIntegrationDataset,
+        structureFun: generateIntegrationStructure
       }
     };
 
