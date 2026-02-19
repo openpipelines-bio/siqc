@@ -57,10 +57,10 @@ export function packColumnaryBinary(data, structure) {
     version: 1,
     categories: structure.categories.reduce((acc, cat) => {
       acc[cat.key] = {
-        name: cat.name,
-        key: cat.key,
-        additionalAxes: cat.additionalAxes || false,
-        defaultFilters: cat.defaultFilters || []
+        // defaults
+        additionalAxes: false,
+        defaultFilters: [],
+        ...cat,
       };
       return acc;
     }, {}),
