@@ -1,6 +1,7 @@
 import { For, Match, Switch, createSignal } from "solid-js";
 import { useSettingsForm } from "./settings-form";
 import { RawData } from "~/types";
+import { SegmentedControl } from "~/components/ui/segmented-control";
 
 interface SampleMetadata {
   rna_num_barcodes?: number;
@@ -145,51 +146,14 @@ export function SampleFilterForm(props: SampleFilterFormProps) {
       <div class="flex justify-between items-center mb-4">
         <h3 class="text-lg font-medium">Sample selection</h3>
         
-        <div 
-          class="relative rounded-full bg-gray-200 shadow-sm overflow-hidden"
-          style={{ height: "32px", width: "180px" }}
-        >
-          <div 
-            class="absolute bg-white rounded-full shadow transition-transform duration-200"
-            style={{
-              width: "calc(50% - 4px)",
-              height: "calc(100% - 4px)",
-              top: "2px",
-              left: "2px",
-              transform: viewMode() === 'simple' 
-                ? 'translateX(0)' 
-                : 'translateX(calc(100% + 4px))'
-            }}
-          />
-          
-          <div class="absolute inset-0 flex w-full h-full">
-            <div 
-              class="flex items-center justify-center w-1/2 cursor-pointer"
-              onClick={() => setViewMode('simple')}
-            >
-              <span 
-                class={`text-sm font-medium transition-colors duration-200 ${
-                  viewMode() === 'simple' ? 'text-gray-800' : 'text-gray-500'
-                }`}
-              >
-                Simple
-              </span>
-            </div>
-            
-            <div 
-              class="flex items-center justify-center w-1/2 cursor-pointer"
-              onClick={() => setViewMode('table')}
-            >
-              <span 
-                class={`text-sm font-medium transition-colors duration-200 ${
-                  viewMode() === 'table' ? 'text-gray-800' : 'text-gray-500'
-                }`}
-              >
-                Table
-              </span>
-            </div>
-          </div>
-        </div>
+        <SegmentedControl
+          options={[
+            { value: "simple", label: "Simple" },
+            { value: "table", label: "Table" },
+          ]}
+          value={viewMode()}
+          onChange={(v) => setViewMode(v as "simple" | "table")}
+        />
       </div>
       
       <div class="mb-2">
