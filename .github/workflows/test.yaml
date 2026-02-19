@@ -44,6 +44,10 @@ jobs:
             type: visium_large
             path: resources_test/visium_dataset_large
             output: visium-large-report.html
+          - name: integration
+            type: integration
+            path: resources_test/integration_dataset
+            output: integration-report.html
       fail-fast: false
     steps:
       - name: Checkout code
