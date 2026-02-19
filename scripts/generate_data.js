@@ -685,7 +685,6 @@ function generateXeniumStructure() {
 
   return {
     categories: [
-      /* Note: disabled this category as long as there aren't any filters for it.
       {
         name: 'Sample QC',
         key: 'sample_summary_stats',
@@ -693,7 +692,6 @@ function generateXeniumStructure() {
         additionalAxes: false,
         defaultFilters: []
       },
-      */
       {
         name: 'Cell RNA QC',
         key: 'cell_rna_stats',
@@ -944,7 +942,6 @@ function generateCosmxStructure() {
 
   return {
     categories: [
-      /* Note: disabled this category as long as there aren't any filters for it.
       {
         name: 'Sample QC',
         key: 'sample_summary_stats',
@@ -952,7 +949,6 @@ function generateCosmxStructure() {
         additionalAxes: false,
         defaultFilters: []
       },
-      */
       {
         name: 'Cell RNA QC',
         key: 'cell_rna_stats',
@@ -1196,7 +1192,7 @@ function generateIntegrationDataset({
   };
 
   return {
-    cell_stats: transformDataFrame(cellStatsRaw),
+    cell_rna_stats: transformDataFrame(cellStatsRaw),
     integration_stats: transformDataFrame(integrationStatsRaw)
   };
 }
@@ -1224,7 +1220,7 @@ function generateIntegrationStructure() {
       },
       {
         name: 'Cell QC',
-        key: 'cell_stats',
+        key: 'cell_rna_stats',
         description: 'Cell-level annotations with UMAP embedding. Use the UMAP toggle on each plot to visualise distributions in embedding space.',
         additionalAxes: true,
         embeddings: [

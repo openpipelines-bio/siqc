@@ -3,6 +3,7 @@ import { useSettingsForm } from "./settings-form";
 
 export function GlobalVisualizationSettings(props: {
   getCategoricalColumns: Accessor<string[]>;
+  hasEmbeddings: boolean;
 }) {
   const form = useSettingsForm();
   const groupingEnabled = form.useStore(state => state.values.globalVisualization.groupingEnabled);
@@ -83,7 +84,7 @@ export function GlobalVisualizationSettings(props: {
       </div>
 
       {/* Binning settings */}
-      <Show when={binning().enabled}>
+      <Show when={props.hasEmbeddings}>
         <div class="mt-4 border rounded-md bg-white overflow-hidden">
           {/* Collapsible Header */}
           <button 

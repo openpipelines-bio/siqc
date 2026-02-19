@@ -130,7 +130,9 @@ export class DataLoader {
             event.data.data) {
           this.worker!.removeEventListener('message', handleMessage);
           resolve(event.data.data as ArrayBuffer);
-        } else if (event.data.type === 'error') {
+        } else if (event.data.type === 'error' &&
+            event.data.columnName === columnName &&
+            event.data.categoryKey === categoryKey) {
           this.worker!.removeEventListener('message', handleMessage);
           reject(new Error(event.data.error));
         }
@@ -191,7 +193,8 @@ export class DataLoader {
             event.data.data) {
           this.worker!.removeEventListener('message', handleMessage);
           resolve(event.data.data as { [columnName: string]: ArrayBuffer });
-        } else if (event.data.type === 'error') {
+        } else if (event.data.type === 'error' &&
+            event.data.categoryKey === categoryKey) {
           this.worker!.removeEventListener('message', handleMessage);
           reject(new Error(event.data.error));
         }
@@ -536,6 +539,8 @@ self.addEventListener('message', async (event) => {
   } catch (error) {
     self.postMessage({
       type: 'error',
+      columnName: columnName,
+      categoryKey: categoryKey,
       error: error.message
     });
   }

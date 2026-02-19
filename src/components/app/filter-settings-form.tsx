@@ -12,7 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/small-card";
-import { FilterSettings, RawDataCategory, RawData } from "~/types";
+import { FilterSettings, RawDataCategory, RawData, CategoryEmbedding } from "~/types";
 import { TextFieldInput, TextFieldLabel } from "../ui/text-field";
 import { NumberField } from "../number-field";
 import { createSignal, Show } from "solid-js";
@@ -26,6 +26,7 @@ type Props = {
   forceGroupBy?: string | undefined;
   isGlobalGroupingEnabled?: boolean;
   category?: keyof RawData;
+  embeddings?: CategoryEmbedding[];
 }
 
 export function FilterSettingsForm(props: Props) {
@@ -43,12 +44,8 @@ export function FilterSettingsForm(props: Props) {
 
   // Remove getNumericalColumns() function as it's no longer needed
 
-  // Add a constant to check if the data has spatial coordinates
-  const hasSpatialCoordinates = () => {
-    const hasX = props.data.columns.some(c => c.name === "x_coord");
-    const hasY = props.data.columns.some(c => c.name === "y_coord");
-    return hasX && hasY;
-  };
+  // Check if the category has embeddings (spatial / UMAP coordinates)
+  const hasEmbeddings = () => (props.embeddings?.length ?? 0) > 0;
 
   // Inside the component, update this function to be more general
   const getFilterImpact = () => {

@@ -59,10 +59,12 @@ siqc generate-test-data --type xenium --output ./spatial-data
 
 ```bash
 # Render report from test data
-siqc render --data ./example-data/data.json --structure ./example-data/structure.json --output ./my-report.html
+siqc render --data ./example-data/data.json --structure ./example-data/structure.json --output ./example-data/report.html
+
+siqc render --data ./example-data/data.json --structure ./example-data/structure.json --output ./spatial-data/report.html
 
 # Open the report in your browser
-open my-report.html
+open ./spatial-data/report.html
 ```
 
 ### 3. Use Your Own Data
@@ -197,9 +199,21 @@ Define the report structure and categories:
       "defaultFilters": []
     },
     {
-      "key": "spatial_coords", 
-      "name": "Spatial Coordinates",
+      "key": "cell_spatial_stats",
+      "name": "Spatial Statistics",
       "additionalAxes": true,
+      "embeddings": [
+        { "name": "Spatial", "x": "x_coord", "y": "y_coord" }
+      ],
+      "defaultFilters": []
+    },
+    {
+      "key": "cell_umap_stats",
+      "name": "UMAP Statistics",
+      "additionalAxes": true,
+      "embeddings": [
+        { "name": "UMAP", "x": "umap_x", "y": "umap_y" }
+      ],
       "defaultFilters": []
     }
   ]
@@ -211,6 +225,10 @@ Define the report structure and categories:
 - `name` (required): Display name shown as the section heading
 - `description` (optional): Descriptive text rendered below the heading
 - `additionalAxes` (required): Whether secondary axes are enabled for histogram plots
+- `embeddings` (optional): List of 2D coordinate embeddings (e.g. spatial coordinates, UMAP). When present, histogram plots in this category gain a toggle to switch between the histogram view and an embedding heatmap. Currently the first embedding in the list is used. Each embedding requires:
+  - `name`: Display name shown in the toggle button and plot title (e.g. `"Spatial"`, `"UMAP"`)
+  - `x`: Column name for the X coordinate
+  - `y`: Column name for the Y coordinate
 - `defaultFilters` (required): List of plot configurations shown in this category
 
 **Data Types:**

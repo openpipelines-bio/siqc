@@ -11,7 +11,9 @@ export interface DataHeader {
 export interface CategoryInfo {
   name: string;
   key: string;
+  description?: string;
   additionalAxes: boolean;
+  embeddings?: { name: string; x: string; y: string }[];
   defaultFilters: FilterSettings[];
 }
 
@@ -26,7 +28,7 @@ export interface ColumnInfo {
 
 export interface FilterSettings {
   type: "histogram" | "bar" | "scatter";
-  visualizationType?: "histogram" | "spatial";
+  visualizationType?: string;
   field: string;
   label?: string;
   yField?: string;

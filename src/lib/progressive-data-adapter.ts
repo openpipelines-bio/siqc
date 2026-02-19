@@ -83,28 +83,28 @@ class ProgressiveDataAdapterImpl implements ProgressiveDataAdapter {
   }
   
   private async _doPreloadCriticalData(): Promise<void> {
-    // Preload data that's likely to be needed immediately
-    // Map specific columns to their categories to avoid errors
-    const criticalData = [
-      { categoryKey: 'cell_rna_stats', columnName: 'sample_id' },
-      { categoryKey: 'cell_rna_stats', columnName: 'total_counts' },
-      { categoryKey: 'cell_rna_stats', columnName: 'num_nonzero_vars' },
-      { categoryKey: 'sample_summary_stats', columnName: 'sample_id' }
-    ];
-    
-    const preloadPromises: Promise<any>[] = [];
-    
-    // Preload critical columns from their correct categories
-    for (const { categoryKey, columnName } of criticalData) {
-      preloadPromises.push(
+    // Derive columns to preload from the actual header rather than hardcoding,
+    // so this works for any dataset type (sc, xenium, integration, etc.)
+    await dataLoader.init();
+    const header = dataLoader.getHeader();
+
+    // Preload the first column of each category as a lightweight warm-up
+    const seen = new Set<string>();
+    const preloadList: { categoryKey: string; columnName: string }[] = [];
+    for (const col of header.columns) {
+      if (!seen.has(col.categoryKey)) {
+        preloadList.push({ categoryKey: col.categoryKey, columnName: col.name });
+        seen.add(col.categoryKey);
+      }
+    }
+
+    await Promise.allSettled(
+      preloadList.map(({ categoryKey, columnName }) =>
         this.loadColumnData(categoryKey, columnName).catch((error) => {
-          // Log but ignore errors for preloading - allows for graceful degradation
           console.debug(`Preload failed for ${categoryKey}.${columnName}:`, error.message);
         })
-      );
-    }
-    
-    await Promise.allSettled(preloadPromises);
+      )
+    );
   }
 }
 

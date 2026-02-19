@@ -101,7 +101,9 @@ async function getProgressiveReportStructure(): Promise<ReportStructure> {
     const categories = Object.values(header.categories).map(cat => ({
       name: cat.name,
       key: cat.key as keyof RawData,
+      description: cat.description,
       additionalAxes: cat.additionalAxes,
+      embeddings: cat.embeddings,
       defaultFilters: cat.defaultFilters
     }));
     

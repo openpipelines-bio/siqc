@@ -243,6 +243,8 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
   } catch (error) {
     self.postMessage({
       type: 'error',
+      columnName,
+      categoryKey,
       error: error instanceof Error ? error.message : String(error)
     } as WorkerResponse);
   }

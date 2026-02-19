@@ -27,6 +27,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./component
 import { SpatialHeatmap } from "./components/spatial-heatmap";
 import { ChartPlaceholder } from "./lib/progressive-loading";
 import { DynamicChart } from "./components/dynamic-chart";
+import { SegmentedControl } from "./components/ui/segmented-control";
 import { PerformanceDashboard } from "./components/performance-dashboard";
 
 const App: Component = () => {
@@ -77,11 +78,7 @@ const App: Component = () => {
     const sampleIds = data.sample_summary_stats?.columns.find(col => col.name === "sample_id")?.categories || [];
     form.setFieldValue("sampleSelection.selectedSamples", sampleIds);
 
-    // check if the data has spatial coordinates
-    // TODO: allow users to select which coordinates to use
-    const columnNames = data.cell_rna_stats?.columns.map(c => c.name) || [];
-    const hasSpatialCoordinates = columnNames.includes("x_coord") && columnNames.includes("y_coord");
-    form.setFieldValue("binning.enabled", hasSpatialCoordinates);
+    // (spatial / embedding toggle is driven by category.embeddings in the report structure)
   });
 
   const sampleMetadata = createMemo(() => {
@@ -167,7 +164,10 @@ const App: Component = () => {
 
   const binning = form.useStore(state => state.values.binning);
 
-
+  // True when any category in the report has embeddings defined (enables binning UI)
+  const hasEmbeddings = createMemo(() =>
+    reportStructure().categories.some(c => (c.embeddings?.length ?? 0) > 0)
+  );
 
   // initialise filtersettings
   const [settings, setSettings] = createStore<Settings>(
@@ -289,7 +289,7 @@ const App: Component = () => {
         <PerformanceDashboard />
         
         <SampleFilterForm sampleMetadata={sampleMetadata()} data={data()} />
-        <GlobalVisualizationSettings getCategoricalColumns={getCategoricalColumns} />
+        <GlobalVisualizationSettings getCategoricalColumns={getCategoricalColumns} hasEmbeddings={hasEmbeddings()} />
         <For each={reportStructure().categories}>
           {(category) => (
             <Show when={(settings[category.key] || []).length > 0}>
@@ -326,54 +326,15 @@ const App: Component = () => {
                           <H3>{setting.label}</H3>
                           
                           {/* Add the visualization toggle in the top-right corner */}
-                          <Show when={category.key === "cell_rna_stats" && 
-                                    setting.type === "histogram" && 
-                                    binning().enabled}>
-                            <div 
-                              class="relative rounded-full bg-gray-200 shadow-sm overflow-hidden"
-                              style={{ height: "32px", width: "180px" }}
-                            >
-                              <div 
-                                class="absolute bg-white rounded-full shadow transition-transform duration-200"
-                                style={{
-                                  width: "calc(50% - 4px)",
-                                  height: "calc(100% - 4px)",
-                                  top: "2px",
-                                  left: "2px",
-                                  transform: setting.visualizationType !== 'spatial' 
-                                    ? 'translateX(0)' 
-                                    : 'translateX(calc(100% + 4px))'
-                                }}
-                              />
-                              
-                              <div class="absolute inset-0 flex w-full h-full">
-                                <div 
-                                  class="flex items-center justify-center w-1/2 cursor-pointer"
-                                  onClick={() => setSettings(category.key, i(), "visualizationType", "histogram" )}
-                                >
-                                  <span 
-                                    class={`text-sm font-medium transition-colors duration-200 ${
-                                      setting.visualizationType !== 'spatial' ? 'text-gray-800' : 'text-gray-500'
-                                    }`}
-                                  >
-                                    Histogram
-                                  </span>
-                                </div>
-                                
-                                <div 
-                                  class="flex items-center justify-center w-1/2 cursor-pointer"
-                                  onClick={() => setSettings(category.key, i(), "visualizationType", "spatial" )}
-                                >
-                                  <span 
-                                    class={`text-sm font-medium transition-colors duration-200 ${
-                                      setting.visualizationType === 'spatial' ? 'text-gray-800' : 'text-gray-500'
-                                    }`}
-                                  >
-                                    Spatial
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
+                          <Show when={setting.type === "histogram" && (category.embeddings?.length ?? 0) > 0}>
+                            <SegmentedControl
+                              options={[
+                                { value: "histogram", label: "Histogram" },
+                                ...(category.embeddings ?? []).map(e => ({ value: e.name, label: e.name }))
+                              ]}
+                              value={setting.visualizationType ?? "histogram"}
+                              onChange={(v) => setSettings(category.key, i(), "visualizationType", v)}
+                            />
                           </Show>
                         </div>
                         
@@ -446,34 +407,35 @@ const App: Component = () => {
                                     )}
                                   </DynamicChart>
                                 </Match>
-                                {/* Spatial visualization */}
-                                <Match when={setting.type === "histogram" && setting.visualizationType === "spatial"}>
+                                {/* Embedding visualization (spatial, UMAP, etc.) */}
+                                <Match when={setting.type === "histogram" && category.embeddings?.some(e => e.name === setting.visualizationType)}>
                                   <DynamicChart
                                     categoryKey={String(category.key)}
                                     columnNames={[
                                       setting.field,
-                                      "x_coord",
-                                      "y_coord",
+                                      category.embeddings?.find(e => e.name === setting.visualizationType)?.x ?? "x",
+                                      category.embeddings?.find(e => e.name === setting.visualizationType)?.y ?? "y",
                                       ...(currentFilterGroupBy() ? [currentFilterGroupBy()!] : [])
                                     ]}
                                     filterSettings={setting}
                                     groupBy={currentFilterGroupBy()}
-                                    title={`${setting.label} Spatial Heatmap`}
+                                    title={`${setting.label} ${setting.visualizationType} Heatmap`}
                                     height="600px"
                                     dataProvider={() => (filters().enabled ? fullyFilteredData() : filteredData())?.[category.key]}
                                   >
                                     {(chartData, metadata) => {
-                                      // Extract coordinate data
-                                      const xCoordCol = chartData.columns?.find((col: any) => col.name === "x_coord");
-                                      const yCoordCol = chartData.columns?.find((col: any) => col.name === "y_coord");
+                                      const embedding = category.embeddings?.find(e => e.name === setting.visualizationType);
+                                      const xCol = embedding?.x ?? "x";
+                                      const yCol = embedding?.y ?? "y";
+                                      const embeddingName = embedding?.name ?? setting.visualizationType ?? "Spatial";
+                                      const xCoordCol = chartData.columns?.find((col: any) => col.name === xCol);
+                                      const yCoordCol = chartData.columns?.find((col: any) => col.name === yCol);
                                       const valueCol = chartData.columns?.find((col: any) => col.name === setting.field);
-                                      const groupCol = currentFilterGroupBy() 
+                                      const groupCol = currentFilterGroupBy()
                                         ? chartData.columns?.find((col: any) => col.name === currentFilterGroupBy())
                                         : null;
-                                      
+
                                       if (xCoordCol && yCoordCol && valueCol) {
-                                        const binning = form.useStore(state => state.values.binning);
-                                        
                                         return (
                                           <SpatialHeatmap
                                             xCoords={xCoordCol.data as number[]}
@@ -481,7 +443,7 @@ const App: Component = () => {
                                             values={valueCol.data as number[]}
                                             groupIds={groupCol ? groupCol.data as number[] : null}
                                             groupLabels={groupCol?.categories || null}
-                                            title={`${setting.label || setting.field} Spatial Heatmap`}
+                                            title={`${setting.label || setting.field} ${embeddingName} Heatmap`}
                                             colorField={setting.label || setting.field}
                                             faceted={!!groupCol}
                                             height="600px"
@@ -490,12 +452,12 @@ const App: Component = () => {
                                           />
                                         );
                                       }
-                                      
+
                                       // Fallback message if data is missing
                                       return (
                                         <div class="text-gray-500 p-4">
-                                          Missing coordinate data for spatial visualization. 
-                                          Required: x_coord, y_coord, and {setting.field}.
+                                          Missing coordinate data for {embeddingName.toLowerCase()} visualization.
+                                          Required: {xCol}, {yCol}, and {setting.field}.
                                         </div>
                                       );
                                     }}
@@ -511,7 +473,8 @@ const App: Component = () => {
                                 globalGroupBy={category.key === "metrics_cellranger_stats" ? undefined : (globalVisualization().groupingEnabled ? globalVisualization().groupBy : undefined)}
                                 forceGroupBy={category.key === "metrics_cellranger_stats" ? "sample_id" : undefined}
                                 isGlobalGroupingEnabled={globalVisualization().groupingEnabled}
-                                category={category.key} // Pass the category key
+                                category={category.key}
+                                embeddings={category.embeddings}
                               />
                             </div>
                           </CollapsibleContent>

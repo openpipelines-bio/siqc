@@ -19,7 +19,7 @@ export type RawData = {
 
 export interface FilterSettings {
   type: "histogram" | "bar" | "scatter";
-  visualizationType?: "histogram" | "spatial";  // Only histogram and spatial
+  visualizationType?: string;  // "histogram" or any embedding name from the category's embeddings
   field: string;
   label?: string;
   // yField can still stay as it might be used by the scatterplot component
@@ -45,11 +45,18 @@ export type ReportStructure = {
   categories: QCCategory[];
 }
 
+export type CategoryEmbedding = {
+  name: string;
+  x: string;
+  y: string;
+};
+
 export type QCCategory = {
   name: string;
   key: keyof RawData;
   description?: string;
   additionalAxes: boolean;
+  embeddings?: CategoryEmbedding[];
   defaultFilters: FilterSettings[];
 };
 
