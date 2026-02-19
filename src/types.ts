@@ -48,6 +48,7 @@ export type ReportStructure = {
 export type QCCategory = {
   name: string;
   key: keyof RawData;
+  description?: string;
   additionalAxes: boolean;
   defaultFilters: FilterSettings[];
 };

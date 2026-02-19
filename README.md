@@ -192,6 +192,7 @@ Define the report structure and categories:
     {
       "key": "cell_rna_stats",
       "name": "Cell RNA Statistics",
+      "description": "Optional descriptive text shown below the category heading.",
       "additionalAxes": false,
       "defaultFilters": []
     },
@@ -205,9 +206,15 @@ Define the report structure and categories:
 }
 ```
 
+**Category fields:**
+- `key` (required): Matches the key in `data.json`
+- `name` (required): Display name shown as the section heading
+- `description` (optional): Descriptive text rendered below the heading
+- `additionalAxes` (required): Whether secondary axes are enabled for histogram plots
+- `defaultFilters` (required): List of plot configurations shown in this category
+
 **Data Types:**
-- `categorical`: Integer indices with category labels
+- `categorical`: Integer indices with category labels. Requires a separate `categories` array mapping indices to labels.
 - `integer`: Whole numbers
 - `numeric`: Floating-point numbers
 - `boolean`: True/false values
-
